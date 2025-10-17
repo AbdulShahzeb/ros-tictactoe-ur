@@ -553,11 +553,10 @@ class TicTacToeNode(Node):
                     return
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Human move only on their turn and if robot is disabled
+                # Human move only on their turn
                 if (
                     not self.game.game_over
                     and self.game.current_player == self.human_player
-                    and not self.enable_robot
                 ):
 
                     cell = self.ui.get_cell_from_mouse(event.pos)
