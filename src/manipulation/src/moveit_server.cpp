@@ -31,7 +31,7 @@ public:
     );
 
     // Configure planner parameters
-    node_->declare_parameter("planning_time", 20.0);
+    node_->declare_parameter("planning_time", 10.0);
     node_->declare_parameter("goal_joint_tolerance", 0.001);
     node_->declare_parameter("goal_position_tolerance", 0.001);  
     node_->declare_parameter("goal_orientation_tolerance", 0.001);  
@@ -43,7 +43,7 @@ public:
     move_group_->setGoalJointTolerance(node_->get_parameter("goal_joint_tolerance").as_double());
     move_group_->setGoalPositionTolerance(node_->get_parameter("goal_position_tolerance").as_double());
     move_group_->setGoalOrientationTolerance(node_->get_parameter("goal_orientation_tolerance").as_double());
-    // move_group_->setPlannerId("RRTConnect");
+    // move_group_->setPlannerId("RRTConnectkConfigDefault");
     // move_group_->setPlannerId("BKPIECEkConfigDefault");
     move_group_->setPlannerId("TRRTkConfigDefault");
 
@@ -204,10 +204,10 @@ public:
     std::string frame_id = "world";
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 0.04, 3.0, 0.70, -0.18, 0.5, frame_id, "backWall"));
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(0.04, 2.4, 3.0, -0.15, 0.25, 0.8, frame_id, "sideWall"));
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(3, 3, 0.01, 0.85, 0.25, -0.01, frame_id, "table"));
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 2.4, 0.04, 0.85, 0.25, 0.82, frame_id, "ceiling"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 0.02, 3.0, 0.70, -0.18, 0.5, frame_id, "backWall"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(0.02, 2.4, 3.0, -0.25, 0.25, 0.8, frame_id, "sideWall"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(3, 3, 0.02, 0.85, 0.25, -0.01, frame_id, "table"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 2.4, 0.02, 0.85, 0.25, 0.87, frame_id, "ceiling"));
   }
 
   auto generateCollisionObject(float sx, float sy, float sz, float x, float y, float z, const std::string& frame_id, const std::string& id) -> moveit_msgs::msg::CollisionObject {
