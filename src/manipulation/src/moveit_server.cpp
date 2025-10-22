@@ -4,8 +4,8 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose.hpp"
-#include "moveit/move_group_interface/move_group_interface.h"
-#include "moveit/planning_scene_interface/planning_scene_interface.h"
+#include "moveit/move_group_interface/move_group_interface.hpp"
+#include "moveit/planning_scene_interface/planning_scene_interface.hpp"
 #include "moveit_msgs/msg/constraints.hpp"
 #include "moveit_msgs/msg/joint_constraint.hpp"
 #include "moveit_msgs/msg/orientation_constraint.hpp"
@@ -51,6 +51,10 @@ public:
       "/moveit_path_plan",
       std::bind(&MoveitServer::handle_request, this, _1, _2)
     );
+  }
+
+  double deg2rad(double degrees) {
+    return degrees * M_PI / 180.0;
   }
 
 	moveit_msgs::msg::Constraints set_constraint(const std::string& constraint_str) {
@@ -124,7 +128,7 @@ public:
 
 		// Common setup for all orientations
 		orientation_constraint.header.frame_id = move_group_->getPlanningFrame();
-		orientation_constraint.link_name = move_group_->getEndEffectorLink();
+		orientation_constraint.link_name = move_group_->getEndEffectorLink(); // tool0 by default
 		orientation_constraint.absolute_x_axis_tolerance = 0.001;
 		orientation_constraint.absolute_y_axis_tolerance = 0.001;
 		orientation_constraint.absolute_z_axis_tolerance = 0.001;
@@ -204,10 +208,10 @@ public:
     std::string frame_id = "world";
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 0.02, 3.0, 0.70, -0.18, 0.5, frame_id, "backWall"));
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(0.02, 2.4, 3.0, -0.25, 0.25, 0.8, frame_id, "sideWall"));
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(3, 3, 0.02, 0.85, 0.25, -0.01, frame_id, "table"));
-    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 2.4, 0.02, 0.85, 0.25, 0.87, frame_id, "ceiling"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 0.02, 0.9, 0.85, -0.18, 0.435, frame_id, "backWall"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(0.02, 1.5, 0.9, -0.25, 0.57, 0.435, frame_id, "sideWall"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 1.5, 0.02, 0.85, 0.57, -0.01, frame_id, "table"));
+    planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 1.5, 0.02, 0.85, 0.57, 0.87, frame_id, "ceiling"));
   }
 
   auto generateCollisionObject(float sx, float sy, float sz, float x, float y, float z, const std::string& frame_id, const std::string& id) -> moveit_msgs::msg::CollisionObject {
@@ -262,7 +266,7 @@ private:
 
   geometry_msgs::msg::Pose create_pose_from_positions(const std::vector<double>& positions) {
     tf2::Quaternion q;
-    q.setRPY(positions[3], positions[4], positions[5]);
+    q.setRPY(deg2rad(positions[3]), deg2rad(positions[4]), deg2rad(positions[5]));
     q.normalize();
     
     geometry_msgs::msg::Pose target_pose;
@@ -276,12 +280,12 @@ private:
 
   std::map<std::string, double> create_joint_map_from_positions(const std::vector<double>& positions) {
     return {
-        {"shoulder_pan_joint", positions[5]},
-        {"shoulder_lift_joint", positions[0]},
-        {"elbow_joint", positions[1]},
-        {"wrist_1_joint", positions[2]},
-        {"wrist_2_joint", positions[3]},
-        {"wrist_3_joint", positions[4]}
+        {"shoulder_pan_joint", deg2rad(positions[0])},
+        {"shoulder_lift_joint", deg2rad(positions[1])},
+        {"elbow_joint", deg2rad(positions[2])},
+        {"wrist_1_joint", deg2rad(positions[3])},
+        {"wrist_2_joint", deg2rad(positions[4])},
+        {"wrist_3_joint", deg2rad(positions[5])}
     };
   }
 
@@ -342,19 +346,8 @@ int main(int argc, char** argv)
   return 0;
 }
 
-// birds-eye for camera horizontal
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{positions: [0.822, 0.183, 0.856, 0.0, 3.14, 0.0]}"
-
-// birds-eye for camera vertical
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{positions: [0.64, 0.174, 1.041, -1.56, -0.0, -1.571]}"
-
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{positions: [0.44, 0.174, 0.841, -1.56, -0.0, -1.571]}"
-// can't push past 0.75
-
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{positions: [0.44, 0.16, 0.83,-1.687, 0, -1.61]}"
-
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{positions: [0.471,0.149, 1.044, -1.978, 0.058, -1.549]}"
-// Object 1: X=1.248m, Y=-0.042m, Z=1.067m
-
 // Home pose Joint
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'joint', positions: [-1.3, 1.57, -1.83, -1.57, 0, 0], constraints_identifier: '0'}"
+// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'joint', positions: [0, -74.5, 90, -105, -90, 0]}"
+
+// Home pose Cartesian
+// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'cartesian', positions: [0.59, 0.133, 0.366, 180, 0, 90]}"
