@@ -8,9 +8,10 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-# set(msg_files
-#   "msg/Example.msg"
-# )
+set(msg_files
+  "msg/CellPose.msg"
+  "msg/CellPoseArray.msg"
+)
 
 set(srv_files
   "srv/MoveRequest.srv"

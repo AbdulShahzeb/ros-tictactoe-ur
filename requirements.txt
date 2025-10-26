@@ -1,0 +1,5 @@
+numpy
+scipy
+pygame
+pyrealsense2
+opencv-python
