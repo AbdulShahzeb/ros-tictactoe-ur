@@ -16,9 +16,9 @@ class CameraNode(Node):
         super().__init__("camera_node")
 
         # Parameters
-        self.GRID_WIDTH = 0.38  # meters - INNER playable area width
-        self.GRID_HEIGHT = 0.24  # meters - INNER playable area height
-        self.BORDER_WIDTH = 0.01  # meters - thickness of black border
+        self.GRID_WIDTH = 0.56  # meters - INNER playable area width
+        self.GRID_HEIGHT = 0.35  # meters - INNER playable area height
+        self.BORDER_WIDTH = 0.016  # meters - thickness of black border
         self.GRID_COLS = 8
         self.GRID_ROWS = 5
         self.BLACK_THRESH = 120
@@ -32,11 +32,11 @@ class CameraNode(Node):
 
         # Subscribers
         self.rgb_sub = self.create_subscription(
-            Image, "/camera/color/image_raw", self.image_callback, 10
+            Image, "/camera/camera/color/image_raw", self.image_callback, 10
         )
 
         self.pc_sub = self.create_subscription(
-            PointCloud2, "/camera/depth/color/points", self.pointcloud_callback, 10
+            PointCloud2, "/camera/camera/depth/color/points", self.pointcloud_callback, 10
         )
 
         # Publisher for cell poses

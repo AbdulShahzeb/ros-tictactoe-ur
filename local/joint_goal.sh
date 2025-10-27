@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ "$1" == "home" ] && [ $# -eq 1 ]; then
-    ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'joint', positions: [0, -74.5, 90, -105, -90, 0], constraints_identifier: '1'}"
+    ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'joint', positions: [0, -74.5, 90, -105, 270, 0], constraints_identifier: '1'}"
     exit 0
 fi
 
