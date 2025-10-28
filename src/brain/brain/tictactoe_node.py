@@ -12,7 +12,7 @@ from typing import Optional, Tuple, List
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Int32MultiArray, Int32
+from std_msgs.msg import String, Int32MultiArray, Int32, Bool
 from geometry_msgs.msg import Point
 
 
@@ -333,6 +333,10 @@ class TicTacToeNode(Node):
         self.game_status_pub = self.create_publisher(String, "game_status", 10)
 
         # Subscribers
+        self.shutdown_sub = self.create_subscription(
+            Bool, "/kb/shutdown", self.shutdown_callback, 10
+        )
+        self.shutdown_requested = False
         # TODO: Subscribe to perception/board_detection for camera-based board state
         # self.board_detection_sub = self.create_subscription(
         #     Int32MultiArray, 'perception/board_detection',
@@ -577,17 +581,23 @@ class TicTacToeNode(Node):
         if self.ui_enabled:
             pygame.quit()
 
+    def shutdown_callback(self, msg):
+        """Handle shutdown request from keyboard node."""
+        self.get_logger().info("Shutdown requested via keyboard node")
+        self.cleanup()
+        self.shutdown_requested = True
+
 
 def main(args=None):
     rclpy.init(args=args)
     node = TicTacToeNode()
 
     try:
-        rclpy.spin(node)
+        while rclpy.ok() and not node.shutdown_requested:
+            rclpy.spin_once(node, timeout_sec=0.1)
     except KeyboardInterrupt:
         pass
     finally:
-        node.cleanup()
         node.destroy_node()
         rclpy.shutdown()
 

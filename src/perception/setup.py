@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'camera_node = perception.camera:main',
+            'grid_detector_node = perception.grid_detector:main',
+            'grid_vision_node = perception.grid_vision:main',
         ],
     },
 )

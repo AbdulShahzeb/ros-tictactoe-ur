@@ -3,12 +3,15 @@
 Launch file for TicTacToe game node.
 """
 
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
 import os
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
+from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -55,6 +58,15 @@ def generate_launch_description():
         description='Enable pygame UI for visualization'
     )
 
+    # RealSense
+    '''realsense_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            os.path.join(FindPackageShare('realsense2_camera').find('realsense2_camera'), 'launch'),
+            '/rs_launch.py'
+        ]),
+        condition=IfCondition(LaunchConfiguration('enable_camera'))
+    )'''
+
     # TicTacToe node
     tictactoe_node = Node(
         package='brain',
@@ -71,6 +83,35 @@ def generate_launch_description():
         }]
     )
 
+    # Grid Vision Node
+    grid_vision_node = Node(
+        package='perception',
+        executable='grid_vision_node',
+        name='grid_vision_node',
+        output='screen',
+        parameters=[{
+            'exposure': 90,
+            'corner0_x': -0.650,
+            'corner0_y': -0.078,
+            'corner1_x': -0.625,
+            'corner1_y': -0.697,
+            'corner2_x': -0.210,
+            'corner2_y': -0.060,
+            'corner3_x': -0.197,
+            'corner3_y': -0.686,
+        }]
+    )
+
+    # Keyboard Node
+    keyboard_node = Node(
+        package='brain',
+        executable='keyboard_node',
+        name='keyboard_node',
+        output='screen',
+        emulate_tty=True,
+        prefix='xterm -e'
+    )
+
     return LaunchDescription([
         player_arg,
         agent_x_file_arg,
@@ -79,4 +120,7 @@ def generate_launch_description():
         enable_camera_arg,
         ui_enabled_arg,
         tictactoe_node,
+        keyboard_node,
+        grid_vision_node,
+        #realsense_launch,
     ])
