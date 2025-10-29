@@ -91,15 +91,23 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'exposure': 90,
-            'corner0_x': -0.650,
-            'corner0_y': -0.078,
-            'corner1_x': -0.625,
-            'corner1_y': -0.697,
-            'corner2_x': -0.210,
-            'corner2_y': -0.060,
-            'corner3_x': -0.197,
-            'corner3_y': -0.686,
+            'corner0_x': 0.8315,
+            'corner0_y': -0.0909,
+            'corner1_x': 0.8315,
+            'corner1_y': 0.3137,
+            'corner2_x': 0.2605,
+            'corner2_y': -0.0909,
+            'corner3_x': 0.2605,
+            'corner3_y': 0.3137
         }]
+    )
+
+    # Static Transform
+    static_transform_node = Node(
+        package='manipulation',
+        executable='static_transform',
+        name='static_transform_node',
+        output='screen',
     )
 
     # Keyboard Node
@@ -123,4 +131,5 @@ def generate_launch_description():
         keyboard_node,
         grid_vision_node,
         #realsense_launch,
+        static_transform_node,
     ])

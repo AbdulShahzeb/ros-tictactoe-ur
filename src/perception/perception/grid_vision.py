@@ -46,7 +46,11 @@ class MovingAverageFilter:
 
     def get_filtered_pose(self) -> Optional[MarkerPose]:
         """Get the filtered (averaged) pose"""
-        if len(self.x_values) == 0:
+        if (
+            len(self.x_values) == 0
+            or len(self.y_values) == 0
+            or len(self.angle_values) == 0
+        ):
             return None
 
         avg_x = sum(self.x_values) / len(self.x_values)
@@ -76,28 +80,38 @@ class GridVisionNode(Node):
         self.detector_params = cv2.aruco.DetectorParameters()
 
         # --- Declare and get ROS parameters ---
-        self.declare_parameter('exposure', 90)
-        self.declare_parameter('corner0_x', -0.650)  # Top left X (metres)
-        self.declare_parameter('corner0_y', -0.078)  # Top left Y (metres)
-        self.declare_parameter('corner1_x', -0.625)  # Bottom left X (metres)
-        self.declare_parameter('corner1_y', -0.697)  # Bottom left Y (metres)
-        self.declare_parameter('corner2_x', -0.210)  # Top right X (metres)
-        self.declare_parameter('corner2_y', -0.060)  # Top right Y (metres)
-        self.declare_parameter('corner3_x', -0.197)  # Bottom right X (metres)
-        self.declare_parameter('corner3_y', -0.686)  # Bottom right Y (metres)
+        self.declare_parameter("exposure", 90)
+        self.declare_parameter("corner0_x", 0.8315)  # Top left X (metres)
+        self.declare_parameter("corner0_y", -0.0909)  # Top left Y (metres)
+        self.declare_parameter("corner1_x", 0.8315)  # Bottom left X (metres)
+        self.declare_parameter("corner1_y", 0.3137)  # Bottom left Y (metres)
+        self.declare_parameter("corner2_x", 0.2605)  # Top right X (metres)
+        self.declare_parameter("corner2_y", -0.0909)  # Top right Y (metres)
+        self.declare_parameter("corner3_x", 0.2605)  # Bottom right X (metres)
+        self.declare_parameter("corner3_y", 0.3137)  # Bottom right Y (metres)
 
-        self.exposure = self.get_parameter('exposure').get_parameter_value().integer_value
-        
-        # Store corner positions
+        self.exposure = (
+            self.get_parameter("exposure").get_parameter_value().integer_value
+        )
+
+        # Store corner positions (in metres)
         self.corner_positions_m = {
-            0: [self.get_parameter('corner0_x').get_parameter_value().double_value,
-                self.get_parameter('corner0_y').get_parameter_value().double_value],
-            1: [self.get_parameter('corner1_x').get_parameter_value().double_value,
-                self.get_parameter('corner1_y').get_parameter_value().double_value],
-            2: [self.get_parameter('corner2_x').get_parameter_value().double_value,
-                self.get_parameter('corner2_y').get_parameter_value().double_value],
-            3: [self.get_parameter('corner3_x').get_parameter_value().double_value,
-                self.get_parameter('corner3_y').get_parameter_value().double_value],
+            0: [
+                self.get_parameter("corner0_x").get_parameter_value().double_value,
+                self.get_parameter("corner0_y").get_parameter_value().double_value,
+            ],
+            1: [
+                self.get_parameter("corner1_x").get_parameter_value().double_value,
+                self.get_parameter("corner1_y").get_parameter_value().double_value,
+            ],
+            2: [
+                self.get_parameter("corner2_x").get_parameter_value().double_value,
+                self.get_parameter("corner2_y").get_parameter_value().double_value,
+            ],
+            3: [
+                self.get_parameter("corner3_x").get_parameter_value().double_value,
+                self.get_parameter("corner3_y").get_parameter_value().double_value,
+            ],
         }
 
         # --- MAFs for outer markers (ID: 0-3) ---
@@ -108,7 +122,7 @@ class GridVisionNode(Node):
             3: MovingAverageFilter(5),  # Bottom right
         }
 
-        # --- MAFs for grid markers (ID: 4-7) ---
+        # --- MAFs for grid markers (ID: 4-7) in pixel coordinates ---
         self.grid_corner_filters: Dict[int, MovingAverageFilter] = {
             4: MovingAverageFilter(5),  # Grid top left
             5: MovingAverageFilter(5),  # Grid bottom left
@@ -120,17 +134,28 @@ class GridVisionNode(Node):
         self.filtered_poses: Dict[int, MarkerPose] = {}
         self.grid_filtered_poses: Dict[int, MarkerPose] = {}
 
-        self.transform_matrix = None
-        self.warped_size = (438, 627)  # Size of warped outer image (measure manually)
-        self.zoom_mm = 35
-
-        self.warped_to_robot_transform = None
-        
         # Grid parameters
         self.cell_size_mm = 70.0  # mm
         self.grid_rows = 5
-        self.grid_cols = 8
-        self.grid_height_mm = 2.0  # mm
+        self.grid_cols = 5
+
+        # Calculate grid dimensions from corner positions
+        grid_width_m = abs(
+            self.corner_positions_m[0][0] - self.corner_positions_m[2][0]
+        )
+        grid_height_m = abs(
+            self.corner_positions_m[0][1] - self.corner_positions_m[1][1]
+        )
+
+        # Warped grid size in pixels (using cell size as reference)
+        pixels_per_mm = 2.0  # Adjust for desired resolution
+        self.grid_warped_width = int(self.grid_cols * self.cell_size_mm * pixels_per_mm)
+        self.grid_warped_height = int(
+            self.grid_rows * self.cell_size_mm * pixels_per_mm
+        )
+
+        self.grid_transform_matrix = None
+        self.grid_to_robot_transform = None
 
         # Publishers and Subscribers
         self.camera_sub = self.create_subscription(
@@ -140,7 +165,7 @@ class GridVisionNode(Node):
         self.toggle_log_sub = self.create_subscription(
             Bool, "/kb/toggle_log", self.log_callback, 10
         )
-        self.toggle_log = False
+        self.toggle_log = True
 
         self.shutdown_sub = self.create_subscription(
             Bool, "/kb/shutdown", self.shutdown_callback, 10
@@ -169,10 +194,16 @@ class GridVisionNode(Node):
             node.get_logger().error(
                 "Service /camera/camera/set_parameters not available, giving up."
             )
+            if self.exposure_param_timer:
+                self.exposure_param_timer.cancel()
+                self.exposure_param_timer = None
+            node.destroy_node()
             return
 
         request = SetParameters.Request()
-        parameter = Parameter(name="rgb_camera.exposure", value=self.exposure).to_parameter_msg()
+        parameter = Parameter(
+            name="rgb_camera.exposure", value=self.exposure
+        ).to_parameter_msg()
         request.parameters = [parameter]
         future = exposure_client.call_async(request)
         rclpy.spin_until_future_complete(node, future)
@@ -195,46 +226,37 @@ class GridVisionNode(Node):
 
         node.destroy_node()
 
-    def detect_marker_pose(self, marker_id, corners) -> MarkerPose:
-        """Extract pose (center and orientation) from marker corners"""
+    def get_marker_corner_position(self, marker_id: int, corners) -> tuple:
+        """Extract the appropriate corner position from marker corners"""
         marker_corners = corners[0]
 
-        # Calculate center
-        center_x = float(np.mean(marker_corners[:, 0]))
-        center_y = float(np.mean(marker_corners[:, 1]))
+        # Marker corners are: [0]=TL, [1]=TR, [2]=BR, [3]=BL
+        corner_map = {
+            0: 0,  # Top left -> use top-left corner
+            1: 3,  # Bottom left -> use bottom-left corner
+            2: 1,  # Top right -> use top-right corner
+            3: 2,  # Bottom right -> use bottom-right corner
+            4: 0,  # Grid top left -> use top-left corner
+            5: 3,  # Grid bottom left -> use bottom-left corner
+            6: 1,  # Grid top right -> use top-right corner
+            7: 2,  # Grid bottom right -> use bottom-right corner
+        }
 
-        # Calculate orientation
-        top_left = marker_corners[0]
-        top_right = marker_corners[1]
-        bottom_right = marker_corners[2]
-        bottom_left = marker_corners[3]
+        corner_idx = corner_map[marker_id]
+        return float(marker_corners[corner_idx][0]), float(
+            marker_corners[corner_idx][1]
+        )
 
-        dx = bottom_right[0] - bottom_left[0]
-        dy = bottom_right[1] - bottom_left[1]
-        angle_rad = math.atan2(dy, dx)
-        angle_deg = math.degrees(angle_rad)
-
-        # For outer corner markers (0-3), use corner positions
-        # For grid markers (4-7), use center positions
-        if marker_id in [0, 1, 2, 3]:
-            match marker_id:
-                case 0:
-                    return MarkerPose(top_left[0], top_left[1], angle_deg)
-                case 1:
-                    return MarkerPose(bottom_left[0], bottom_left[1], angle_deg)
-                case 2:
-                    return MarkerPose(top_right[0], top_right[1], angle_deg)
-                case 3:
-                    return MarkerPose(bottom_right[0], bottom_right[1], angle_deg)
-        else:
-            return MarkerPose(center_x, center_y, angle_deg)
-
-    def update_perspective_transform(self):
-        """Update perspective transform matrix based on filtered corner markers"""
+    def transform_pixel_to_robot(
+        self, pixel_x: float, pixel_y: float
+    ) -> Optional[tuple]:
+        """Transform pixel coordinates to robot coordinates (in mm) using outer markers 0-3"""
+        # Need all 4 outer corner markers
         required_markers = [0, 1, 2, 3]
         if not all(marker_id in self.filtered_poses for marker_id in required_markers):
-            return False
+            return None
 
+        # Source points: detected pixel positions of outer markers
         src_points = np.float32(
             [
                 [self.filtered_poses[0].x, self.filtered_poses[0].y],  # Top left
@@ -244,169 +266,253 @@ class GridVisionNode(Node):
             ]
         )
 
-        # Convert corner positions to mm for calculations
-        corner0_mm = [self.corner_positions_m[0][0] * 1000, self.corner_positions_m[0][1] * 1000]
-        corner2_mm = [self.corner_positions_m[2][0] * 1000, self.corner_positions_m[2][1] * 1000]
-        corner1_mm = [self.corner_positions_m[1][0] * 1000, self.corner_positions_m[1][1] * 1000]
-
-        field_width_mm = abs(corner0_mm[0] - corner2_mm[0])
-        field_height_mm = abs(corner0_mm[1] - corner1_mm[1])
-
-        # Calculate expansion in pixels
-        expansion_x_pixels = (self.zoom_mm / field_width_mm) * self.warped_size[0]
-        expansion_y_pixels = (self.zoom_mm / field_height_mm) * self.warped_size[1]
-
-        # Destination points for warped image
+        # Destination points: known real-world positions in mm
+        corner_mm = {
+            k: [v[0] * 1000, v[1] * 1000] for k, v in self.corner_positions_m.items()
+        }
         dst_points = np.float32(
             [
-                [expansion_x_pixels, expansion_y_pixels],
-                [expansion_x_pixels, self.warped_size[1] - expansion_y_pixels],
-                [self.warped_size[0] - expansion_x_pixels, expansion_y_pixels],
-                [self.warped_size[0] - expansion_x_pixels, self.warped_size[1] - expansion_y_pixels],
+                [corner_mm[0][0], corner_mm[0][1]],  # Top left
+                [corner_mm[1][0], corner_mm[1][1]],  # Bottom left
+                [corner_mm[2][0], corner_mm[2][1]],  # Top right
+                [corner_mm[3][0], corner_mm[3][1]],  # Bottom right
+            ]
+        )
+
+        # Create pixel-to-robot transform
+        pixel_to_robot_matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+
+        # Transform the pixel point
+        pixel_point = np.array([[[pixel_x, pixel_y]]], dtype=np.float32)
+        robot_point = cv2.perspectiveTransform(pixel_point, pixel_to_robot_matrix)
+
+        return (robot_point[0][0][0], robot_point[0][0][1])
+
+    def detect_marker_pose(self, marker_id, corners) -> MarkerPose:
+        """Extract pose (position and orientation) from marker corners"""
+        marker_corners = corners[0]
+
+        # Get the appropriate corner position
+        x, y = self.get_marker_corner_position(marker_id, corners)
+
+        # Calculate orientation from bottom edge
+        bottom_left = marker_corners[3]
+        bottom_right = marker_corners[2]
+
+        dx = bottom_right[0] - bottom_left[0]
+        dy = bottom_right[1] - bottom_left[1]
+        angle_rad = math.atan2(dy, dx)
+        angle_deg = math.degrees(angle_rad)
+
+        return MarkerPose(x, y, angle_deg)
+
+    def update_grid_transform(self) -> bool:
+        """Update perspective transform matrix for grid based on grid markers (4-7)"""
+        required_markers = [4, 5, 6, 7]
+        if not all(
+            marker_id in self.grid_filtered_poses for marker_id in required_markers
+        ):
+            return False
+
+        # Source points from camera image (corner positions of markers 4-7)
+        src_points = np.float32(
+            [
+                [
+                    self.grid_filtered_poses[4].x,
+                    self.grid_filtered_poses[4].y,
+                ],  # Top left
+                [
+                    self.grid_filtered_poses[5].x,
+                    self.grid_filtered_poses[5].y,
+                ],  # Bottom left
+                [
+                    self.grid_filtered_poses[6].x,
+                    self.grid_filtered_poses[6].y,
+                ],  # Top right
+                [
+                    self.grid_filtered_poses[7].x,
+                    self.grid_filtered_poses[7].y,
+                ],  # Bottom right
+            ]
+        )
+
+        # Destination points for warped grid image (corners of the warped rectangle)
+        dst_points = np.float32(
+            [
+                [0, 0],  # Top left
+                [0, self.grid_warped_height],  # Bottom left
+                [self.grid_warped_width, 0],  # Top right
+                [self.grid_warped_width, self.grid_warped_height],  # Bottom right
             ]
         )
 
         # Calculate perspective transform matrix
-        self.transform_matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+        self.grid_transform_matrix = cv2.getPerspectiveTransform(src_points, dst_points)
 
-        # Set up transform from warped image CF to robot CF
-        self.setup_warped_to_robot_transform()
+        # Set up transform from warped grid to robot coordinates
+        self.setup_grid_to_robot_transform()
         return True
 
-    def setup_warped_to_robot_transform(self):
-        """Set up transformation from warped image CF to robot CF"""
+    def setup_grid_to_robot_transform(self):
+        """Set up transformation from warped grid coordinates to robot coordinates"""
+        # Warped grid corners in pixel coordinates
         warped_points = np.float32(
             [
                 [0, 0],
-                [0, self.warped_size[1]],
-                [self.warped_size[0], 0],
-                [self.warped_size[0], self.warped_size[1]],
+                [0, self.grid_warped_height],
+                [self.grid_warped_width, 0],
+                [self.grid_warped_width, self.grid_warped_height],
             ]
         )
 
-        # Convert to mm for calculations
-        corner_mm = {k: [v[0] * 1000, v[1] * 1000] for k, v in self.corner_positions_m.items()}
+        # Grid physical corners in robot frame (in mm)
+        # Need to transform the detected pixel positions of markers 4-7 to robot coordinates
+        # This requires first having a camera-to-robot transform based on markers 0-3
 
-        # Corresponding robot CF positions (in mm)
-        robot_points = np.float32(
-            [
-                [corner_mm[0][0] - self.zoom_mm, corner_mm[0][1] + self.zoom_mm],
-                [corner_mm[1][0] - self.zoom_mm, corner_mm[1][1] - self.zoom_mm],
-                [corner_mm[2][0] + self.zoom_mm, corner_mm[2][1] + self.zoom_mm],
-                [corner_mm[3][0] + self.zoom_mm, corner_mm[3][1] - self.zoom_mm],
-            ]
-        )
+        robot_points_mm = []
+        for marker_id in [4, 5, 6, 7]:
+            if marker_id in self.grid_filtered_poses:
+                # Get pixel position
+                pixel_pose = self.grid_filtered_poses[marker_id]
 
-        self.warped_to_robot_transform = cv2.getPerspectiveTransform(
+                # Transform pixel to robot coordinates using the outer marker reference
+                # You need a transform_pixel_to_robot() function here
+                robot_pos = self.transform_pixel_to_robot(pixel_pose.x, pixel_pose.y)
+                robot_points_mm.append([robot_pos[0], robot_pos[1]])
+
+        if len(robot_points_mm) != 4:
+            return
+
+        robot_points = np.float32(robot_points_mm)
+
+        self.grid_to_robot_transform = cv2.getPerspectiveTransform(
             warped_points, robot_points
         )
 
-    def transform_to_robot_coordinates(
-        self, warped_x: float, warped_y: float, warped_angle: float
-    ) -> MarkerPose:
-        """Transform position from warped image coordinates to robot coordinates (in mm)"""
-        if self.warped_to_robot_transform is None:
-            return None
-
-        # Transform position
-        warped_point = np.array([[[warped_x, warped_y]]], dtype=np.float32)
-        robot_point = cv2.perspectiveTransform(
-            warped_point, self.warped_to_robot_transform
-        )
-        robot_x = robot_point[0][0][0]
-        robot_y = robot_point[0][0][1]
-
-        # For angle transformation
-        unit_end_x = warped_x + math.cos(warped_angle)
-        unit_end_y = warped_y + math.sin(warped_angle)
-
-        warped_unit_end = np.array([[[unit_end_x, unit_end_y]]], dtype=np.float32)
-        robot_unit_end = cv2.perspectiveTransform(
-            warped_unit_end, self.warped_to_robot_transform
-        )
-
-        # Calculate angle in robot CF
-        dx_robot = robot_unit_end[0][0][0] - robot_x
-        dy_robot = robot_unit_end[0][0][1] - robot_y
-        tmp_angle = math.degrees(math.atan2(dy_robot, dx_robot))
-
-        if tmp_angle >= 0.0:
-            robot_angle = tmp_angle - 180
-        else:
-            robot_angle = tmp_angle + 180
-
-        return MarkerPose(robot_x, robot_y, robot_angle)
-
     def calculate_grid_cell_poses(self) -> Optional[list]:
-        """Calculate poses for all 40 grid cells based on the 4 grid corner markers"""
-        # Need all 4 grid corner markers
-        required_grid_markers = [4, 5, 6, 7]
-        if not all(marker_id in self.grid_filtered_poses for marker_id in required_grid_markers):
+        """Calculate poses for all grid cells based on warped grid"""
+        if self.grid_to_robot_transform is None:
             return None
-
-        # Get the 4 corner marker poses in robot coordinates (in mm)
-        tl = self.grid_filtered_poses[4]  # Top left (row 0, col 0)
-        bl = self.grid_filtered_poses[5]  # Bottom left (row 4, col 0)
-        tr = self.grid_filtered_poses[6]  # Top right (row 0, col 7)
-        br = self.grid_filtered_poses[7]  # Bottom right (row 4, col 7)
 
         cell_poses = []
 
-        # Calculate poses for all cells using bilinear interpolation
+        # Calculate cell size in warped image pixels
+        cell_width_px = self.grid_warped_width / self.grid_cols
+        cell_height_px = self.grid_warped_height / self.grid_rows
+
         for row in range(self.grid_rows):
             for col in range(self.grid_cols):
-                # Normalized coordinates (0 to 1)
-                u = col / (self.grid_cols - 1) if self.grid_cols > 1 else 0  # Left to right
-                v = row / (self.grid_rows - 1) if self.grid_rows > 1 else 0  # Top to bottom
+                # Calculate center of cell in warped image coordinates
+                center_x_warped = (col + 0.5) * cell_width_px
+                center_y_warped = (row + 0.5) * cell_height_px
 
-                # Bilinear interpolation for position
-                x = (1-u)*(1-v)*tl.x + u*(1-v)*tr.x + (1-u)*v*bl.x + u*v*br.x
-                y = (1-u)*(1-v)*tl.y + u*(1-v)*tr.y + (1-u)*v*bl.y + u*v*br.y
+                # Transform to robot coordinates (in mm)
+                warped_point = np.array(
+                    [[[center_x_warped, center_y_warped]]], dtype=np.float32
+                )
+                robot_point = cv2.perspectiveTransform(
+                    warped_point, self.grid_to_robot_transform
+                )
+                robot_x_mm = robot_point[0][0][0]
+                robot_y_mm = robot_point[0][0][1]
 
-                # Bilinear interpolation for angle (using circular mean)
-                angles_rad = [math.radians(tl.angle), math.radians(tr.angle), 
-                              math.radians(bl.angle), math.radians(br.angle)]
-                weights = [(1-u)*(1-v), u*(1-v), (1-u)*v, u*v]
-                
-                sin_sum = sum(w * math.sin(a) for w, a in zip(weights, angles_rad))
-                cos_sum = sum(w * math.cos(a) for w, a in zip(weights, angles_rad))
-                angle = math.degrees(math.atan2(sin_sum, cos_sum))
+                # Calculate angle (assume grid is aligned, so use average angle from markers)
+                if len(self.grid_filtered_poses) >= 4:
+                    angles = [pose.angle for pose in self.grid_filtered_poses.values()]
+                    angles_rad = [math.radians(a) for a in angles]
+                    sin_sum = sum(math.sin(a) for a in angles_rad)
+                    cos_sum = sum(math.cos(a) for a in angles_rad)
+                    angle = math.degrees(math.atan2(sin_sum, cos_sum)) - 90.0
+                else:
+                    angle = 0.0
 
-                cell_poses.append(MarkerPose(x, y, angle))
+                # Convert from mm to metres
+                cell_poses.append(
+                    MarkerPose(robot_x_mm / 1000.0, robot_y_mm / 1000.0, angle)
+                )
 
         return cell_poses
 
-    def draw_markers_and_region(self, cv_image, corners, ids):
-        """Draw detected markers and the region between corner markers"""
-        cv2.aruco.drawDetectedMarkers(cv_image, corners, ids)
+    def draw_grid_labels(self, warped_grid):
+        """Draw cell labels on warped grid image"""
+        if self.grid_to_robot_transform is None:
+            return
 
-        # Draw filtered outer corner positions
-        corner_points = []
-        for marker_id in [0, 1, 2, 3]:
-            if marker_id in self.filtered_poses:
-                pose = self.filtered_poses[marker_id]
-                center = (int(pose.x), int(pose.y))
-                cv2.circle(cv_image, center, 8, (0, 255, 0), -1)
+        cell_width_px = self.grid_warped_width / self.grid_cols
+        cell_height_px = self.grid_warped_height / self.grid_rows
 
-                line_length = 30
-                end_x = int(pose.x + line_length * math.cos(math.radians(pose.angle)))
-                end_y = int(pose.y + line_length * math.sin(math.radians(pose.angle)))
-                cv2.arrowedLine(cv_image, center, (end_x, end_y), (255, 0, 0), 2)
+        # Get average angle
+        if len(self.grid_filtered_poses) >= 4:
+            angles = [pose.angle for pose in self.grid_filtered_poses.values()]
+            angles_rad = [math.radians(a) for a in angles]
+            sin_sum = sum(math.sin(a) for a in angles_rad)
+            cos_sum = sum(math.cos(a) for a in angles_rad)
+            avg_angle = math.degrees(math.atan2(sin_sum, cos_sum))
+        else:
+            avg_angle = 0.0
 
-                text = f"ID{marker_id}"
-                cv2.putText(
-                    cv_image, text, (center[0] - 30, center[1] - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1,
+        for row in range(self.grid_rows):
+            for col in range(self.grid_cols):
+                # Calculate center of cell
+                center_x_warped = (col + 0.5) * cell_width_px
+                center_y_warped = (row + 0.5) * cell_height_px
+
+                # Transform to robot coordinates
+                warped_point = np.array(
+                    [[[center_x_warped, center_y_warped]]], dtype=np.float32
                 )
-                corner_points.append([pose.x, pose.y])
+                robot_point = cv2.perspectiveTransform(
+                    warped_point, self.grid_to_robot_transform
+                )
+                robot_x_m = robot_point[0][0][0] / 1000.0
+                robot_y_m = robot_point[0][0][1] / 1000.0
 
-        # Draw the region between corner markers
-        if len(corner_points) == 4:
-            points = np.array(
-                [corner_points[0], corner_points[2], corner_points[3], corner_points[1]],
-                dtype=np.int32,
-            )
-            cv2.polylines(cv_image, [points], True, (0, 255, 255), 2)
+                # Draw cell boundary
+                cell_x = int(col * cell_width_px)
+                cell_y = int(row * cell_height_px)
+                cv2.rectangle(
+                    warped_grid,
+                    (cell_x, cell_y),
+                    (int((col + 1) * cell_width_px), int((row + 1) * cell_height_px)),
+                    (0, 255, 0),
+                    1,
+                )
+
+                # Draw center point
+                cv2.circle(
+                    warped_grid,
+                    (int(center_x_warped), int(center_y_warped)),
+                    3,
+                    (255, 0, 0),
+                    -1,
+                )
+
+                # Draw label with coordinates
+                label = f"({robot_x_m:.3f}, {robot_y_m:.3f})"
+                angle_label = f"{avg_angle:.1f}"
+
+                # Position text
+                text_x = int(center_x_warped) - 40
+                text_y = int(center_y_warped) - 5
+
+                cv2.putText(
+                    warped_grid,
+                    label,
+                    (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.3,
+                    (255, 255, 255),
+                    1,
+                )
+                cv2.putText(
+                    warped_grid,
+                    angle_label,
+                    (text_x + 10, text_y + 12),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.3,
+                    (255, 255, 255),
+                    1,
+                )
 
     def image_callback(self, msg):
         try:
@@ -419,63 +525,40 @@ class GridVisionNode(Node):
             )
 
             if ids is not None:
-                # Process outer corner markers (0-3)
+                # Process all markers (0-7)
                 for i, marker_id in enumerate(ids.flatten()):
-                    if marker_id in [0, 1, 2, 3]:
-                        pose = self.detect_marker_pose(marker_id, corners[i])
-                        self.corner_filters[marker_id].add_sample(pose)
+                    pose = self.detect_marker_pose(marker_id, corners[i])
 
+                    if marker_id in [0, 1, 2, 3]:
+                        # Outer corner markers - not needed for grid warp but keep for reference
+                        self.corner_filters[marker_id].add_sample(pose)
                         if self.corner_filters[marker_id].is_ready():
-                            filtered_pose = self.corner_filters[marker_id].get_filtered_pose()
+                            filtered_pose = self.corner_filters[
+                                marker_id
+                            ].get_filtered_pose()
                             if filtered_pose:
                                 self.filtered_poses[marker_id] = filtered_pose
 
-                # Update perspective transform
-                if self.update_perspective_transform():
-                    warped_image = cv2.warpPerspective(
-                        cv_image, self.transform_matrix, self.warped_size
+                    elif marker_id in [4, 5, 6, 7]:
+                        # Grid corner markers
+                        self.grid_corner_filters[marker_id].add_sample(pose)
+                        if self.grid_corner_filters[marker_id].is_ready():
+                            filtered_pose = self.grid_corner_filters[
+                                marker_id
+                            ].get_filtered_pose()
+                            if filtered_pose:
+                                self.grid_filtered_poses[marker_id] = filtered_pose
+
+                # Update grid transform and create warped grid image
+                if self.update_grid_transform():
+                    warped_grid = cv2.warpPerspective(
+                        cv_image,
+                        self.grid_transform_matrix,
+                        (self.grid_warped_width, self.grid_warped_height),
                     )
 
-                    # Detect grid corner markers in warped image
-                    warped_gray = cv2.cvtColor(warped_image, cv2.COLOR_BGR2GRAY)
-                    warped_corners, warped_ids, _ = cv2.aruco.detectMarkers(
-                        warped_gray, self.aruco_dict, parameters=self.detector_params
-                    )
-
-                    if warped_ids is not None:
-                        # Process grid corner markers (4-7)
-                        for i, marker_id in enumerate(warped_ids.flatten()):
-                            if marker_id in [4, 5, 6, 7]:
-                                warped_pose = self.detect_marker_pose(
-                                    marker_id, warped_corners[i]
-                                )
-
-                                # Transform to robot coordinates
-                                robot_pose = self.transform_to_robot_coordinates(
-                                    warped_pose.x,
-                                    warped_pose.y,
-                                    math.radians(warped_pose.angle),
-                                )
-
-                                if robot_pose is not None:
-                                    self.grid_corner_filters[marker_id].add_sample(robot_pose)
-
-                                    if self.grid_corner_filters[marker_id].is_ready():
-                                        filtered_pose = self.grid_corner_filters[marker_id].get_filtered_pose()
-                                        if filtered_pose:
-                                            self.grid_filtered_poses[marker_id] = filtered_pose
-
-                        # Draw grid markers on warped image
-                        cv2.aruco.drawDetectedMarkers(warped_image, warped_corners, warped_ids)
-                        
-                        for marker_id in [4, 5, 6, 7]:
-                            if marker_id in self.grid_filtered_poses:
-                                pose = self.grid_filtered_poses[marker_id]
-                                text = f"Grid{marker_id}: ({pose.x:.0f}, {pose.y:.0f})mm"
-                                cv2.putText(
-                                    warped_image, text, (10, 30 + (marker_id-4)*25),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
-                                )
+                    # Draw cell labels
+                    self.draw_grid_labels(warped_grid)
 
                     # Calculate and publish cell poses
                     cell_poses = self.calculate_grid_cell_poses()
@@ -487,9 +570,8 @@ class GridVisionNode(Node):
 
                         for cell_pose in cell_poses:
                             cell_msg = Pose2D()
-                            # Convert from mm to metres
-                            cell_msg.x = cell_pose.x / 1000.0
-                            cell_msg.y = cell_pose.y / 1000.0
+                            cell_msg.x = cell_pose.x
+                            cell_msg.y = cell_pose.y
                             cell_msg.theta = cell_pose.angle
                             grid_pose.poses.append(cell_msg)
 
@@ -500,10 +582,10 @@ class GridVisionNode(Node):
                                 f"Published {len(cell_poses)} cell poses"
                             )
 
-                    cv2.imshow("Warped Region", warped_image)
+                    cv2.imshow("Warped Grid", warped_grid)
 
-                # Draw markers and region on original image
-                self.draw_markers_and_region(cv_image, corners, ids)
+                # Draw detected markers on original image
+                cv2.aruco.drawDetectedMarkers(cv_image, corners, ids)
 
             cv2.imshow("RealSense Image", cv_image)
             cv2.waitKey(1)

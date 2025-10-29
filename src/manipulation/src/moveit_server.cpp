@@ -7,8 +7,8 @@
 
 #include "geometry_msgs/msg/pose.hpp"
 #include "helper/srv/move_request.hpp"
-#include "moveit/move_group_interface/move_group_interface.hpp"
-#include "moveit/planning_scene_interface/planning_scene_interface.hpp"
+#include "moveit/move_group_interface/move_group_interface.h"
+#include "moveit/planning_scene_interface/planning_scene_interface.h"
 #include "moveit_msgs/msg/constraints.hpp"
 #include "moveit_msgs/msg/joint_constraint.hpp"
 #include "moveit_msgs/msg/orientation_constraint.hpp"
@@ -59,7 +59,7 @@ class MoveitServer {
             orien.header.frame_id = move_group_->getPlanningFrame();
             orien.absolute_x_axis_tolerance = 0.1;
             orien.absolute_y_axis_tolerance = 0.1;
-            orien.absolute_z_axis_tolerance = 3.14;  // Allow full rotation around Z-axis
+            orien.absolute_z_axis_tolerance = 1.57;
             orien.parameterization = moveit_msgs::msg::OrientationConstraint::XYZ_EULER_ANGLES;
             orien.weight = 1.0;
 
