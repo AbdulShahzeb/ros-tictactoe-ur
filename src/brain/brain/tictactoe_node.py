@@ -9,6 +9,7 @@ import pygame
 import sys
 import os
 from typing import Optional, Tuple, List
+import serial
 
 import rclpy
 from rclpy.node import Node
@@ -302,6 +303,7 @@ class TicTacToeNode(Node):
         # Game setup
         self.human_player = 1 if player_str.lower() == "x" else -1
         self.ai_player = -self.human_player
+        self.marker_state = 0 if self.human_player == 1 else 180
 
         # Load AI agent
         if self.ai_player == 1:
@@ -331,6 +333,8 @@ class TicTacToeNode(Node):
         self.game_state_pub = self.create_publisher(Int32MultiArray, "game_state", 10)
         self.move_request_pub = self.create_publisher(Int32, "robot_move_request", 10)
         self.game_status_pub = self.create_publisher(String, "game_status", 10)
+        self.ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+        self.ser.write(f"{self.marker_state}\n".encode())
 
         # Subscribers
         self.shutdown_sub = self.create_subscription(
@@ -376,6 +380,14 @@ class TicTacToeNode(Node):
             self.make_ai_move()
 
         self.publish_game_state()
+
+    def toggle_marker(self):
+        """Toggle marker state for robot drawing."""
+        if self.enable_robot:
+            self.marker_state = 0 if self.marker_state == 180 else 180
+            self.ser.write(f"{self.marker_state}\n".encode())
+            self.get_logger().info(f"Marker state set to {self.marker_state}")
+
 
     def publish_game_state(self):
         """Publish current board state to other nodes."""
@@ -562,10 +574,10 @@ class TicTacToeNode(Node):
                     not self.game.game_over
                     and self.game.current_player == self.human_player
                 ):
-
                     cell = self.ui.get_cell_from_mouse(event.pos)
                     if cell:
                         row, col = cell
+                        self.toggle_marker()
                         self.make_human_move(row, col)
 
         self.ui.draw_board(self.game)

@@ -3,3 +3,4 @@ scipy==1.11.4
 pygame
 pyrealsense2
 opencv-contrib-python==4.9.0.80
+pyserial

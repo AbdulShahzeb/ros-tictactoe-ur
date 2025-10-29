@@ -22,4 +22,4 @@ ros2 launch brain tictactoe_game.launch.py player:=o    # Play as O
 ## Requirements
 1. ROS 2 Humble
 2. Python 3.x
-3. `pip install numpy pygame`
+3. `pip install -r requirements.txt`

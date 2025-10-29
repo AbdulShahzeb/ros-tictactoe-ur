@@ -165,7 +165,7 @@ class GridVisionNode(Node):
         self.toggle_log_sub = self.create_subscription(
             Bool, "/kb/toggle_log", self.log_callback, 10
         )
-        self.toggle_log = True
+        self.toggle_log = False
 
         self.shutdown_sub = self.create_subscription(
             Bool, "/kb/shutdown", self.shutdown_callback, 10

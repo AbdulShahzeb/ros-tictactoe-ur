@@ -7,10 +7,6 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-double deg2rad(double degrees) {
-    return degrees * (M_PI / 180.0);
-}
-
 class StaticTFBroadcaster : public rclcpp::Node
 {
 public:

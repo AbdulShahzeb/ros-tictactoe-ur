@@ -1,33 +1,37 @@
 #include <Servo.h>
 
-Servo myServo;  // create servo object
+Servo myServo;
 
-// Change this if you want a different pin
 const int servoPin = 2;
-
-// Range of motion (0–180° is standard for Servo library)
-int angle = 0;
+int currentAngle = 90;  // Start at middle position
 
 void setup() {
   Serial.begin(9600);
-  myServo.attach(servoPin);  // attach servo to pin 2
-  Serial.println("DSS-P05 Servo Test on Teensy 4.1");
+  myServo.attach(servoPin);
+  myServo.write(currentAngle);
+  
+  Serial.println("DSS-P05 Servo Control Ready");
+  Serial.println("Send angle (0-180) via serial");
 }
 
 void loop() {
-  // Sweep from 0 to 180 degrees
-  for (angle = 0; angle <= 180; angle += 5) {
-    myServo.write(angle);
-    Serial.print("Angle: ");
-    Serial.println(angle);
-    delay(300);  // wait for servo to reach position
-  }
+  if (Serial.available() > 0) {
+    // Read the incoming int
+    int targetAngle = Serial.parseInt();
 
-  // Sweep back
-  for (angle = 180; angle >= 0; angle -= 5) {
-    myServo.write(angle);
-    Serial.print("Angle: ");
-    Serial.println(angle);
-    delay(300);
+    // Validate the angle
+    if (targetAngle >= 0 && targetAngle <= 180) {
+      myServo.write(targetAngle);
+      currentAngle = targetAngle;
+      Serial.print("OK:");
+      Serial.println(currentAngle);
+    } else {
+      Serial.print("ERROR: Angle out of range (0-180): ");
+      Serial.println(targetAngle);
+    }
+
+    while (Serial.available() > 0) {
+      Serial.read();
+    }
   }
 }
