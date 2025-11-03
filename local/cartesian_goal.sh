@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ "$1" == "home" ] && [ $# -eq 1 ]; then
-    ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'cartesian', positions: [0.59, 0.133, 0.366, 180, 0, -90], constraints_identifier: 'ORIEN'}"
+    ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'cartesian', positions: [0.486, 0.132, 0.559, 180, 0, -90], constraints_identifier: 'ORIEN'}"
     exit 0
 fi
 

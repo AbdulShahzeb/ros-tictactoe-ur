@@ -15,6 +15,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Int32MultiArray, Int32, Bool
 from geometry_msgs.msg import Point
+from ament_index_python.packages import get_package_share_directory
 
 
 def encode_board_base3(board_array: np.ndarray) -> int:
@@ -285,9 +286,10 @@ class TicTacToeNode(Node):
         super().__init__("tictactoe_node")
 
         # Declare parameters
+        package_dir = get_package_share_directory('brain')
         self.declare_parameter("player", "x")
-        self.declare_parameter("agent_x_file", "menace_agent_x.npy")
-        self.declare_parameter("agent_o_file", "menace_agent_o.npy")
+        self.declare_parameter("agent_x_file", os.path.join(package_dir, "models", "menace_agent_x.npy"))
+        self.declare_parameter("agent_o_file", os.path.join(package_dir, "models", "menace_agent_o.npy"))
         self.declare_parameter("enable_robot", False)
         self.declare_parameter("enable_camera", False)
         self.declare_parameter("ui_enabled", True)
@@ -303,7 +305,7 @@ class TicTacToeNode(Node):
         # Game setup
         self.human_player = 1 if player_str.lower() == "x" else -1
         self.ai_player = -self.human_player
-        self.marker_state = 0 if self.human_player == 1 else 180
+        self.marker_state = 45 if self.human_player == 1 else 135
 
         # Load AI agent
         if self.ai_player == 1:
@@ -383,10 +385,9 @@ class TicTacToeNode(Node):
 
     def toggle_marker(self):
         """Toggle marker state for robot drawing."""
-        if self.enable_robot:
-            self.marker_state = 0 if self.marker_state == 180 else 180
-            self.ser.write(f"{self.marker_state}\n".encode())
-            self.get_logger().info(f"Marker state set to {self.marker_state}")
+        self.marker_state = 45 if self.marker_state == 135 else 135
+        self.ser.write(f"{self.marker_state}\n".encode())
+        self.get_logger().info(f"Marker state set to {self.marker_state}")
 
 
     def publish_game_state(self):
@@ -557,7 +558,8 @@ class TicTacToeNode(Node):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.get_logger().info("UI closed, shutting down node")
-                rclpy.shutdown()
+                pygame.quit()
+                self.shutdown_requested = True
                 return
 
             elif event.type == pygame.KEYDOWN:
@@ -565,7 +567,8 @@ class TicTacToeNode(Node):
                     self.reset_game()
                 elif event.key == pygame.K_q:
                     self.get_logger().info("Quit requested, shutting down node")
-                    rclpy.shutdown()
+                    pygame.quit()
+                    self.shutdown_requested = True
                     return
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -610,6 +613,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        node.ser.write(f"90\n".encode())
         node.destroy_node()
         rclpy.shutdown()
 

@@ -3,7 +3,7 @@
 Servo myServo;
 
 const int servoPin = 2;
-int currentAngle = 90;  // Start at middle position
+int currentAngle = 0;  // Start at middle position
 
 void setup() {
   Serial.begin(9600);
