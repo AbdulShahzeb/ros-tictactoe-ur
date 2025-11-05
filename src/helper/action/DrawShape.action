@@ -1,0 +1,12 @@
+# Goal
+geometry_msgs/Pose2D pose
+string shape  # "X" or "O"
+string constraints_identifier
+---
+# Result
+bool success
+string message
+---
+# Feedback
+string status
+float32 progress

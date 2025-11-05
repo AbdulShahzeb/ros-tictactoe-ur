@@ -20,7 +20,7 @@ public:
     transformStamped_.header.frame_id = "base_link";
     transformStamped_.child_frame_id = "camera_depth_optical_frame";
     transformStamped_.transform.translation.x = 0.85;
-    transformStamped_.transform.translation.y = 0.04;
+    transformStamped_.transform.translation.y = 0.24;
     transformStamped_.transform.translation.z = 0.92;
 
     tf2::Quaternion q;

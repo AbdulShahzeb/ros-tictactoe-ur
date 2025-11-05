@@ -139,14 +139,6 @@ class GridVisionNode(Node):
         self.grid_rows = 5
         self.grid_cols = 5
 
-        # Calculate grid dimensions from corner positions
-        grid_width_m = abs(
-            self.corner_positions_m[0][0] - self.corner_positions_m[2][0]
-        )
-        grid_height_m = abs(
-            self.corner_positions_m[0][1] - self.corner_positions_m[1][1]
-        )
-
         # Warped grid size in pixels (using cell size as reference)
         pixels_per_mm = 2.0  # Adjust for desired resolution
         self.grid_warped_width = int(self.grid_cols * self.cell_size_mm * pixels_per_mm)
@@ -172,7 +164,7 @@ class GridVisionNode(Node):
         )
         self.shutdown_requested = False
 
-        self.cell_poses_pub = self.create_publisher(GridPose, "/cell_poses", 10)
+        self.cell_poses_pub = self.create_publisher(GridPose, "/perception/cell_poses", 10)
 
         # --- Set Camera Exposure ---
         self.exposure_param_timer = self.create_timer(1.0, self.setup_camera_parameters)
@@ -568,12 +560,19 @@ class GridVisionNode(Node):
                         grid_pose.header.stamp = self.get_clock().now().to_msg()
                         grid_pose.header.frame_id = "robot_base"
 
-                        for cell_pose in cell_poses:
-                            cell_msg = Pose2D()
-                            cell_msg.x = cell_pose.x
-                            cell_msg.y = cell_pose.y
-                            cell_msg.theta = cell_pose.angle
-                            grid_pose.poses.append(cell_msg)
+                        # Publish center 3x3 grid
+                        row_center = self.grid_rows // 2
+                        col_center = self.grid_cols // 2
+                        for r in range(row_center - 1, row_center + 2):
+                            for c in range(col_center - 1, col_center + 2):
+                                i = r * self.grid_cols + c
+                                if 0 <= i < len(cell_poses):
+                                    cell_pose = cell_poses[i]
+                                    cell_msg = Pose2D()
+                                    cell_msg.x = cell_pose.x
+                                    cell_msg.y = cell_pose.y
+                                    cell_msg.theta = cell_pose.angle
+                                    grid_pose.poses.append(cell_msg)
 
                         self.cell_poses_pub.publish(grid_pose)
 

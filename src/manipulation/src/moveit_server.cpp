@@ -1,22 +1,29 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <vector>
 
 #include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/pose2_d.h"
+#include "helper/action/draw_shape.hpp"
 #include "helper/srv/move_request.hpp"
-#include "moveit/move_group_interface/move_group_interface.h"
-#include "moveit/planning_scene_interface/planning_scene_interface.h"
+#include "moveit/move_group_interface/move_group_interface.hpp"
+#include "moveit/planning_scene_interface/planning_scene_interface.hpp"
 #include "moveit_msgs/msg/constraints.hpp"
 #include "moveit_msgs/msg/joint_constraint.hpp"
 #include "moveit_msgs/msg/orientation_constraint.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 class MoveitServer {
    public:
+    using DrawShape = helper::action::DrawShape;
+    using GoalHandleDrawShape = rclcpp_action::ServerGoalHandle<DrawShape>;
+
     MoveitServer(const rclcpp::Node::SharedPtr& node) : node_(node) {
         using namespace std::placeholders;
 
@@ -31,6 +38,12 @@ class MoveitServer {
         node_->declare_parameter("goal_position_tolerance", 0.001);
         node_->declare_parameter("goal_orientation_tolerance", 0.001);
 
+        // Drawing parameters
+        node_->declare_parameter("cell_size", 0.05);
+        node_->declare_parameter("drawing_height", 0.1);
+        node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
+        node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -74.5, 90.0, -105.0, -90.0, 0.0});
+
         setupCollisionObjects();
 
         // Apply parameters
@@ -41,9 +54,17 @@ class MoveitServer {
         // move_group_->setPlannerId("RRTConnectkConfigDefault");
         // move_group_->setPlannerId("BKPIECEkConfigDefault");
         move_group_->setPlannerId("TRRTkConfigDefault");
+        move_group_->setMaxVelocityScalingFactor(0.5);
+        move_group_->setMaxAccelerationScalingFactor(0.5);
 
         service_ =
             node_->create_service<helper::srv::MoveRequest>("/moveit_path_plan", std::bind(&MoveitServer::handle_request, this, _1, _2));
+
+        action_server_ = rclcpp_action::create_server<DrawShape>(node_, "manipulation/draw_shape", std::bind(&MoveitServer::handle_goal, this, _1, _2),
+                                                                 std::bind(&MoveitServer::handle_cancel, this, _1),
+                                                                 std::bind(&MoveitServer::handle_accepted, this, _1));
+
+        RCLCPP_INFO(node_->get_logger(), "MoveIt Server is ready.");
     }
 
     double deg2rad(double degrees) { return degrees * M_PI / 180.0; }
@@ -70,6 +91,8 @@ class MoveitServer {
             q.w = 0.0012;
             orien.orientation = q;
             constraints.orientation_constraints.push_back(orien);
+
+            RCLCPP_INFO(node_->get_logger(), "Orientation constraint applied.");
         }
 
         // Joint Constraints
@@ -153,14 +176,311 @@ class MoveitServer {
         response->success = plan_and_execute();
     }
 
+    // == Action Server Stuff ==
+    rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const DrawShape::Goal> goal) {
+        RCLCPP_INFO(node_->get_logger(), "Received goal request to draw '%s'", goal->shape.c_str());
+        (void)uuid;
+
+        if (goal->shape != "X" && goal->shape != "O") {
+            RCLCPP_ERROR(node_->get_logger(), "Invalid shape: %s", goal->shape.c_str());
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    }
+
+    rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
+        RCLCPP_INFO(node_->get_logger(), "Received request to cancel goal");
+        (void)goal_handle;
+        return rclcpp_action::CancelResponse::ACCEPT;
+    }
+
+    void handle_accepted(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
+        std::thread{std::bind(&MoveitServer::execute_draw_shape, this, goal_handle)}.detach();
+    }
+
+    void execute_draw_shape(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
+        RCLCPP_INFO(node_->get_logger(), "Executing draw shape goal...");
+        const auto goal = goal_handle->get_goal();
+        auto feedback = std::make_shared<DrawShape::Feedback>();
+        auto result = std::make_shared<DrawShape::Result>();
+
+        // Extract grid cell center position
+        double cell_x = goal->pose.x;
+        double cell_y = goal->pose.y;
+        double grid_theta = goal->pose.theta;  // Grid orientation
+
+        // Apply constraints
+        move_group_->clearPathConstraints();
+        if (goal->constraints_identifier != NONE) {
+            move_group_->setPathConstraints(set_constraint(goal->constraints_identifier));
+        }
+
+        bool success = false;
+
+        if (goal->shape == "X") {
+            success = draw_x(cell_x, cell_y, grid_theta, goal_handle, feedback);
+        } else if (goal->shape == "O") {
+            success = draw_o(cell_x, cell_y, goal_handle, feedback);
+        }
+
+        if (success) {
+            // Return home
+            feedback->status = "returning_home";
+            feedback->progress = 0.95;
+            goal_handle->publish_feedback(feedback);
+
+            if (return_home()) {
+                result->success = true;
+                result->message = "Shape drawn successfully";
+                goal_handle->succeed(result);
+                RCLCPP_INFO(node_->get_logger(), "Goal succeeded!");
+            } else {
+                result->success = false;
+                result->message = "Failed to return home";
+                goal_handle->abort(result);
+            }
+        } else {
+            result->success = false;
+            result->message = "Failed to draw shape";
+            goal_handle->abort(result);
+        }
+
+        // Clear constraints after drawing
+        move_group_->clearPathConstraints();
+    }
+
+    bool draw_x(double cx, double cy, double theta, const std::shared_ptr<GoalHandleDrawShape>& goal_handle,
+                std::shared_ptr<DrawShape::Feedback>& feedback) {
+        RCLCPP_INFO(node_->get_logger(), "Drawing X at (%.3f, %.3f) with theta=%.3f", cx, cy, theta);
+
+        double cell_size = node_->get_parameter("cell_size").as_double();
+        double drawing_height = node_->get_parameter("drawing_height").as_double();
+        double lift_height = node_->get_parameter("lift_height").as_double();
+        double half = cell_size / 2.0;
+
+        // Calculate corners accounting for grid rotation
+        double cos_t = std::cos(theta);
+        double sin_t = std::sin(theta);
+
+        // Top-left corner
+        double tl_x = cx + (-half * cos_t - (-half) * sin_t);
+        double tl_y = cy + (-half * sin_t + (-half) * cos_t);
+
+        // Bottom-right corner
+        double br_x = cx + (half * cos_t - half * sin_t);
+        double br_y = cy + (half * sin_t + half * cos_t);
+
+        // Top-right corner
+        double tr_x = cx + (half * cos_t - (-half) * sin_t);
+        double tr_y = cy + (half * sin_t + (-half) * cos_t);
+
+        // Bottom-left corner
+        double bl_x = cx + ((-half) * cos_t - half * sin_t);
+        double bl_y = cy + ((-half) * sin_t + half * cos_t);
+
+        std::vector<geometry_msgs::msg::Pose> waypoints;
+
+        // First diagonal: top-left to bottom-right
+        feedback->status = "moving_to_start";
+        feedback->progress = 0.1;
+        goal_handle->publish_feedback(feedback);
+
+        // Move above top-left (lifted)
+        waypoints.push_back(create_pose(tl_x, tl_y, lift_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Descend to drawing height
+        feedback->status = "descending";
+        feedback->progress = 0.2;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(tl_x, tl_y, drawing_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Draw line to bottom-right
+        feedback->status = "drawing_line_1";
+        feedback->progress = 0.35;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(br_x, br_y, drawing_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Lift up
+        feedback->status = "lifting";
+        feedback->progress = 0.5;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(br_x, br_y, lift_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Second diagonal: move to top-right
+        feedback->status = "moving_to_second_line";
+        feedback->progress = 0.6;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(tr_x, tr_y, lift_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Descend
+        feedback->status = "descending";
+        feedback->progress = 0.7;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(tr_x, tr_y, drawing_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Draw line to bottom-left
+        feedback->status = "drawing_line_2";
+        feedback->progress = 0.8;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(bl_x, bl_y, drawing_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Lift up
+        feedback->status = "lifting";
+        feedback->progress = 0.9;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(bl_x, bl_y, lift_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+
+        return true;
+    }
+
+    bool draw_o(double cx, double cy, const std::shared_ptr<GoalHandleDrawShape>& goal_handle,
+                std::shared_ptr<DrawShape::Feedback>& feedback) {
+        RCLCPP_INFO(node_->get_logger(), "Drawing O at (%.3f, %.3f)", cx, cy);
+
+        double cell_size = node_->get_parameter("cell_size").as_double();
+        double drawing_height = node_->get_parameter("drawing_height").as_double();
+        double lift_height = node_->get_parameter("lift_height").as_double();
+        double radius = cell_size / 2.0;
+        int num_points = 36;
+
+        std::vector<geometry_msgs::msg::Pose> waypoints;
+
+        // Move to starting point on circle (lifted)
+        double start_x = cx + radius;
+        double start_y = cy;
+
+        feedback->status = "moving_to_start";
+        feedback->progress = 0.1;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(start_x, start_y, lift_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Descend to drawing height
+        feedback->status = "descending";
+        feedback->progress = 0.2;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(start_x, start_y, drawing_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Draw circle
+        feedback->status = "drawing_circle";
+
+        for (int i = 1; i <= num_points; i++) {
+            double angle = 2.0 * M_PI * i / num_points;
+            double x = cx + radius * std::cos(angle);
+            double y = cy + radius * std::sin(angle);
+
+            waypoints.push_back(create_pose(x, y, drawing_height));
+
+            feedback->progress = 0.2 + 0.7 * (static_cast<double>(i) / num_points);
+            goal_handle->publish_feedback(feedback);
+        }
+
+        if (!execute_cartesian_path(waypoints)) return false;
+        waypoints.clear();
+
+        // Lift up
+        feedback->status = "lifting";
+        feedback->progress = 0.95;
+        goal_handle->publish_feedback(feedback);
+
+        waypoints.push_back(create_pose(start_x, start_y, lift_height));
+        if (!execute_cartesian_path(waypoints)) return false;
+
+        return true;
+    }
+
+    geometry_msgs::msg::Pose create_pose(double x, double y, double z) {
+        // Create pose with fixed downward orientation
+        tf2::Quaternion q;
+        q.setRPY(deg2rad(180.0), 0.0, deg2rad(90.0));
+        q.normalize();
+
+        geometry_msgs::msg::Pose pose;
+        pose.position.x = x;
+        pose.position.y = y;
+        pose.position.z = z;
+        pose.orientation = tf2::toMsg(q);
+
+        return pose;
+    }
+
+    bool execute_cartesian_path(const std::vector<geometry_msgs::msg::Pose>& waypoints) {
+        moveit_msgs::msg::RobotTrajectory trajectory;
+        const double eef_step = 0.005;
+
+        double fraction = move_group_->computeCartesianPath(waypoints, eef_step, trajectory);
+
+        if (fraction < 0.95) {
+            RCLCPP_ERROR(node_->get_logger(), "Cartesian path planning failed (%.2f%% achieved)", fraction * 100.0);
+            return false;
+        }
+
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        plan.trajectory = trajectory;
+
+        auto result = move_group_->execute(plan);
+        return (result == moveit::core::MoveItErrorCode::SUCCESS);
+    }
+
+    bool return_home() {
+        RCLCPP_INFO(node_->get_logger(), "Returning to home position...");
+
+        auto home_joints = node_->get_parameter("home_joint_positions").as_double_array();
+
+        std::map<std::string, double> joint_targets = {
+            {"shoulder_pan_joint", deg2rad(home_joints[0])}, {"shoulder_lift_joint", deg2rad(home_joints[1])},
+            {"elbow_joint", deg2rad(home_joints[2])},        {"wrist_1_joint", deg2rad(home_joints[3])},
+            {"wrist_2_joint", deg2rad(home_joints[4])},      {"wrist_3_joint", deg2rad(home_joints[5])}};
+
+        move_group_->setJointValueTarget(joint_targets);
+
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        bool success = (move_group_->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
+
+        if (success) {
+            move_group_->execute(plan);
+            return true;
+        }
+
+        return false;
+    }
+
     void setupCollisionObjects() {
         std::string frame_id = "world";
         moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
         planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 0.02, 0.9, 0.85, -0.18, 0.435, frame_id, "backWall"));
-        planning_scene_interface.applyCollisionObject(generateCollisionObject(0.02, 1.5, 0.9, -0.25, 0.57, 0.435, frame_id, "sideWall"));
+        planning_scene_interface.applyCollisionObject(generateCollisionObject(0.02, 1.5, 0.9, -0.35, 0.57, 0.435, frame_id, "sideWall"));
         planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 1.5, 0.02, 0.85, 0.57, -0.01, frame_id, "table"));
-        planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 1.5, 0.02, 0.85, 0.57, 0.87, frame_id, "ceiling"));
+        planning_scene_interface.applyCollisionObject(generateCollisionObject(2.4, 1.5, 0.02, 0.85, 0.57, 0.88, frame_id, "ceiling"));
     }
 
     auto generateCollisionObject(float sx, float sy, float sz, float x, float y, float z, const std::string& frame_id,
@@ -262,6 +582,7 @@ class MoveitServer {
     rclcpp::Node::SharedPtr node_;
     std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
     rclcpp::Service<helper::srv::MoveRequest>::SharedPtr service_;
+    rclcpp_action::Server<DrawShape>::SharedPtr action_server_;
 
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     sensor_msgs::msg::JointState::SharedPtr latest_joint_state_;
@@ -281,9 +602,7 @@ int main(int argc, char** argv) {
 }
 
 // Home pose Joint
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'joint', positions: [0,
-// -74.5, 90, -105, -90, 0]}"
+// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'joint', positions: [0, -74.5, 90, -105, -90, 0]}"
 
 // Home pose Cartesian
-// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'cartesian', positions:
-// [0.59, 0.133, 0.366, 180, 0, 90]}"
+// ros2 service call /moveit_path_plan helper/srv/MoveRequest "{command: 'cartesian', positions: [0.59, 0.133, 0.366, 180, 0, 90]}"

@@ -77,9 +77,6 @@ def generate_launch_description():
             'player': LaunchConfiguration('player'),
             'agent_x_file': LaunchConfiguration('agent_x_file'),
             'agent_o_file': LaunchConfiguration('agent_o_file'),
-            'enable_robot': LaunchConfiguration('enable_robot'),
-            'enable_camera': LaunchConfiguration('enable_camera'),
-            'ui_enabled': LaunchConfiguration('ui_enabled'),
         }]
     )
 
