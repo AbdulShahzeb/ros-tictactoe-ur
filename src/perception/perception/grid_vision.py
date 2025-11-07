@@ -164,7 +164,9 @@ class GridVisionNode(Node):
         )
         self.shutdown_requested = False
 
-        self.cell_poses_pub = self.create_publisher(GridPose, "/perception/cell_poses", 10)
+        self.cell_poses_pub = self.create_publisher(
+            GridPose, "/perception/cell_poses", 10
+        )
 
         # --- Set Camera Exposure ---
         self.exposure_param_timer = self.create_timer(1.0, self.setup_camera_parameters)
@@ -506,6 +508,76 @@ class GridVisionNode(Node):
                     1,
                 )
 
+    def decide_color_at(self, img, x, y):
+        """
+        Detect color at given pixel coordinates.
+        Returns: color code (-1=RED, 0=NONE, 1=BLUE)
+        """
+
+        # Color detection parameters
+        RADIUS_START = 192
+        RADIUS_MIN = 160
+        RADIUS_STEP = 4
+        MIN_AREA_FRAC = 0.02
+        MIN_PIXELS_FLOOR = 10
+
+        # HSV thresholds for blue and red
+        BLUE_LOWER = (100, 80, 50)
+        BLUE_UPPER = (140, 255, 255)
+        RED1_LOWER = (0, 80, 60)
+        RED1_UPPER = (10, 255, 255)
+        RED2_LOWER = (170, 80, 60)
+        RED2_UPPER = (180, 255, 255)
+
+        h, w = img.shape[:2]
+
+        # Convert to HSV
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+        # Create color masks
+        mask_blue = cv2.inRange(hsv, BLUE_LOWER, BLUE_UPPER)
+        mask_red = cv2.inRange(hsv, RED1_LOWER, RED1_UPPER) | cv2.inRange(
+            hsv, RED2_LOWER, RED2_UPPER
+        )
+
+        # Morphological opening to reduce noise
+        kernel = np.ones((3, 3), np.uint8)
+        mask_blue = cv2.morphologyEx(mask_blue, cv2.MORPH_OPEN, kernel, iterations=1)
+        mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_OPEN, kernel, iterations=1)
+
+        # Try decreasing radii until we find a single color
+        for r in range(RADIUS_START, RADIUS_MIN - 1, -RADIUS_STEP):
+            circle_mask = np.zeros((h, w), dtype=np.uint8)
+            cv2.circle(circle_mask, (int(round(x)), int(round(y))), r, 255, -1)
+
+            blue_cnt = cv2.countNonZero(
+                cv2.bitwise_and(mask_blue, mask_blue, mask=circle_mask)
+            )
+            red_cnt = cv2.countNonZero(
+                cv2.bitwise_and(mask_red, mask_red, mask=circle_mask)
+            )
+
+            area = math.pi * (r**2)
+            threshold = max(int(area * MIN_AREA_FRAC), MIN_PIXELS_FLOOR)
+
+            blue_hit = blue_cnt >= threshold
+            red_hit = red_cnt >= threshold
+
+            # If both colors detected, radius too large - continue shrinking
+            if blue_hit and red_hit:
+                continue
+
+            if blue_hit:
+                return 1  # Blue
+            if red_hit:
+                return -1  # Red
+
+            # If we've reached minimum radius, return NONE
+            if r == RADIUS_MIN:
+                return 0
+
+        return 0
+
     def image_callback(self, msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -563,16 +635,26 @@ class GridVisionNode(Node):
                         # Publish center 3x3 grid
                         row_center = self.grid_rows // 2
                         col_center = self.grid_cols // 2
+                        cell_width = self.grid_warped_width / self.grid_cols
+                        cell_height = self.grid_warped_height / self.grid_rows
                         for r in range(row_center - 1, row_center + 2):
                             for c in range(col_center - 1, col_center + 2):
                                 i = r * self.grid_cols + c
                                 if 0 <= i < len(cell_poses):
                                     cell_pose = cell_poses[i]
+
+                                    cx_warped = (c + 0.5) * cell_width
+                                    cy_warped = (r + 0.5) * cell_height
+                                    color_code = self.decide_color_at(
+                                        warped_grid, cx_warped, cy_warped
+                                    )
+
                                     cell_msg = Pose2D()
                                     cell_msg.x = cell_pose.x
                                     cell_msg.y = cell_pose.y
                                     cell_msg.theta = cell_pose.angle
                                     grid_pose.poses.append(cell_msg)
+                                    grid_pose.colors.append(color_code)
 
                         self.cell_poses_pub.publish(grid_pose)
 
