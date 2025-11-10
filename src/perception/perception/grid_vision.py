@@ -84,11 +84,11 @@ class GridVisionNode(Node):
         self.declare_parameter("corner0_x", 0.8315)  # Top left X (metres)
         self.declare_parameter("corner0_y", -0.0909)  # Top left Y (metres)
         self.declare_parameter("corner1_x", 0.8315)  # Bottom left X (metres)
-        self.declare_parameter("corner1_y", 0.3137)  # Bottom left Y (metres)
-        self.declare_parameter("corner2_x", 0.2605)  # Top right X (metres)
-        self.declare_parameter("corner2_y", -0.0909)  # Top right Y (metres)
-        self.declare_parameter("corner3_x", 0.2605)  # Bottom right X (metres)
-        self.declare_parameter("corner3_y", 0.3137)  # Bottom right Y (metres)
+        self.declare_parameter("corner1_y", 0.5000)  # Bottom left Y (metres)
+        self.declare_parameter("corner2_x", 0.2625)  # Top right X (metres)
+        self.declare_parameter("corner2_y", -0.0912)  # Top right Y (metres)
+        self.declare_parameter("corner3_x", 0.2625)  # Bottom right X (metres)
+        self.declare_parameter("corner3_y", 0.5000)  # Bottom right Y (metres)
 
         self.exposure = (
             self.get_parameter("exposure").get_parameter_value().integer_value
@@ -515,8 +515,8 @@ class GridVisionNode(Node):
         """
 
         # Color detection parameters
-        RADIUS_START = 192
-        RADIUS_MIN = 160
+        RADIUS_START = 40
+        RADIUS_MIN = 30
         RADIUS_STEP = 4
         MIN_AREA_FRAC = 0.02
         MIN_PIXELS_FLOOR = 10

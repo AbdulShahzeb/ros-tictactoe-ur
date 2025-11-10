@@ -40,24 +40,6 @@ def generate_launch_description():
         description='Path to O agent model file'
     )
 
-    enable_robot_arg = DeclareLaunchArgument(
-        'enable_robot',
-        default_value='false',
-        description='Enable robot arm for physical gameplay'
-    )
-
-    enable_camera_arg = DeclareLaunchArgument(
-        'enable_camera',
-        default_value='false',
-        description='Enable camera for board detection'
-    )
-
-    ui_enabled_arg = DeclareLaunchArgument(
-        'ui_enabled',
-        default_value='true',
-        description='Enable pygame UI for visualization'
-    )
-
     # RealSense
     '''realsense_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -77,6 +59,7 @@ def generate_launch_description():
             'player': LaunchConfiguration('player'),
             'agent_x_file': LaunchConfiguration('agent_x_file'),
             'agent_o_file': LaunchConfiguration('agent_o_file'),
+            'enable_serial': False
         }]
     )
 
@@ -91,11 +74,11 @@ def generate_launch_description():
             'corner0_x': 0.8315,
             'corner0_y': -0.0909,
             'corner1_x': 0.8315,
-            'corner1_y': 0.3137,
-            'corner2_x': 0.2605,
-            'corner2_y': -0.0909,
-            'corner3_x': 0.2605,
-            'corner3_y': 0.3137
+            'corner1_y': 0.5000,
+            'corner2_x': 0.2625,
+            'corner2_y': -0.0912,
+            'corner3_x': 0.2625,
+            'corner3_y': 0.5000
         }]
     )
 
@@ -121,9 +104,6 @@ def generate_launch_description():
         player_arg,
         agent_x_file_arg,
         agent_o_file_arg,
-        enable_robot_arg,
-        enable_camera_arg,
-        ui_enabled_arg,
         tictactoe_node,
         keyboard_node,
         grid_vision_node,
