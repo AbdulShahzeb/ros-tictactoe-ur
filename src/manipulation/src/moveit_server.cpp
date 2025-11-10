@@ -10,8 +10,10 @@
 #include "geometry_msgs/msg/pose2_d.h"
 #include "helper/action/draw_shape.hpp"
 #include "helper/srv/move_request.hpp"
-#include "moveit/move_group_interface/move_group_interface.hpp"
-#include "moveit/planning_scene_interface/planning_scene_interface.hpp"
+#include "moveit/move_group_interface/move_group_interface.h"
+#include "moveit/planning_scene_interface/planning_scene_interface.h"
+#include "moveit/robot_trajectory/robot_trajectory.h"
+#include "moveit/trajectory_processing/iterative_time_parameterization.h"
 #include "moveit_msgs/msg/constraints.hpp"
 #include "moveit_msgs/msg/joint_constraint.hpp"
 #include "moveit_msgs/msg/orientation_constraint.hpp"
@@ -40,9 +42,11 @@ class MoveitServer {
 
         // Drawing parameters
         node_->declare_parameter("cell_size", 0.05);
-        node_->declare_parameter("drawing_height", 0.1);
+        node_->declare_parameter("drawing_height", 0.188);
         node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
-        node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -74.5, 90.0, -105.0, -90.0, 0.0});
+        node_->declare_parameter("x_offset", -0.05);
+        node_->declare_parameter("y_offset", -0.085);
+        node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -103.5, 106.1, -92.6, -90.0, 0.0});
 
         setupCollisionObjects();
 
@@ -54,8 +58,8 @@ class MoveitServer {
         // move_group_->setPlannerId("RRTConnectkConfigDefault");
         // move_group_->setPlannerId("BKPIECEkConfigDefault");
         move_group_->setPlannerId("TRRTkConfigDefault");
-        move_group_->setMaxVelocityScalingFactor(0.5);
-        move_group_->setMaxAccelerationScalingFactor(0.5);
+        move_group_->setMaxVelocityScalingFactor(0.1);
+        move_group_->setMaxAccelerationScalingFactor(0.1);
 
         service_ =
             node_->create_service<helper::srv::MoveRequest>("/moveit_path_plan", std::bind(&MoveitServer::handle_request, this, _1, _2));
@@ -65,6 +69,7 @@ class MoveitServer {
                                                                  std::bind(&MoveitServer::handle_accepted, this, _1));
 
         RCLCPP_INFO(node_->get_logger(), "MoveIt Server is ready.");
+        return_home();
     }
 
     double deg2rad(double degrees) { return degrees * M_PI / 180.0; }
@@ -229,6 +234,7 @@ class MoveitServer {
             feedback->status = "returning_home";
             feedback->progress = 0.95;
             goal_handle->publish_feedback(feedback);
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             if (return_home()) {
                 result->success = true;
@@ -257,7 +263,11 @@ class MoveitServer {
         double cell_size = node_->get_parameter("cell_size").as_double();
         double drawing_height = node_->get_parameter("drawing_height").as_double();
         double lift_height = node_->get_parameter("lift_height").as_double();
+        double x_offset = node_->get_parameter("x_offset").as_double();
+        double y_offset = node_->get_parameter("y_offset").as_double();
         double half = cell_size / 2.0;
+        cx += x_offset;
+        cy += y_offset;
 
         // Calculate corners accounting for grid rotation
         double cos_t = std::cos(theta);
@@ -363,8 +373,12 @@ class MoveitServer {
         double cell_size = node_->get_parameter("cell_size").as_double();
         double drawing_height = node_->get_parameter("drawing_height").as_double();
         double lift_height = node_->get_parameter("lift_height").as_double();
+        double x_offset = node_->get_parameter("x_offset").as_double();
+        double y_offset = node_->get_parameter("y_offset").as_double();
         double radius = cell_size / 2.0;
         int num_points = 36;
+        cx -= x_offset;
+        cy += y_offset;
 
         std::vector<geometry_msgs::msg::Pose> waypoints;
 
@@ -419,15 +433,17 @@ class MoveitServer {
 
     geometry_msgs::msg::Pose create_pose(double x, double y, double z) {
         // Create pose with fixed downward orientation
-        tf2::Quaternion q;
-        q.setRPY(deg2rad(180.0), 0.0, deg2rad(90.0));
-        q.normalize();
+        geometry_msgs::msg::Quaternion q;
+        q.x = -0.70654;
+        q.y = 0.70767;
+        q.z = 0.0;
+        q.w = 0.0012;
 
         geometry_msgs::msg::Pose pose;
         pose.position.x = x;
         pose.position.y = y;
         pose.position.z = z;
-        pose.orientation = tf2::toMsg(q);
+        pose.orientation = q;
 
         return pose;
     }
@@ -435,17 +451,25 @@ class MoveitServer {
     bool execute_cartesian_path(const std::vector<geometry_msgs::msg::Pose>& waypoints) {
         moveit_msgs::msg::RobotTrajectory trajectory;
         const double eef_step = 0.005;
+        const double jump_threshold = 0.0;
+        double fraction = move_group_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
 
-        double fraction = move_group_->computeCartesianPath(waypoints, eef_step, trajectory);
-
-        if (fraction < 0.95) {
+        if (fraction < 0.90) {
             RCLCPP_ERROR(node_->get_logger(), "Cartesian path planning failed (%.2f%% achieved)", fraction * 100.0);
             return false;
         }
 
-        moveit::planning_interface::MoveGroupInterface::Plan plan;
-        plan.trajectory = trajectory;
+        moveit_msgs::msg::RobotTrajectory trajectory_slow;
+        trajectory_processing::IterativeParabolicTimeParameterization iptp(100, 0.05);
+        robot_trajectory::RobotTrajectory rt(move_group_->getRobotModel(), move_group_->getName());
+        rt.setRobotTrajectoryMsg(*move_group_->getCurrentState(), trajectory);
+        iptp.computeTimeStamps(rt, 1, 1);
+        rt.getRobotTrajectoryMsg(trajectory);
+        iptp.computeTimeStamps(rt, 0.1, 0.1);
+        rt.getRobotTrajectoryMsg(trajectory_slow);
 
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        plan.trajectory_ = trajectory_slow;
         auto result = move_group_->execute(plan);
         return (result == moveit::core::MoveItErrorCode::SUCCESS);
     }

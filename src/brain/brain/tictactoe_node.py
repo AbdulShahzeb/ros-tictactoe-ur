@@ -348,7 +348,7 @@ class TicTacToeNode(Node):
         self.shutdown_requested = False
 
         self.grid_poses_sub = self.create_subscription(
-            GridPose, "perception/grid_poses", self.grid_poses_callback, 10
+            GridPose, "perception/cell_poses", self.grid_poses_callback, 10
         )
         self.grid_poses = [
             Pose2D(x=0.55, y=0.03, theta=78.87),
@@ -387,9 +387,9 @@ class TicTacToeNode(Node):
 
         self.publish_game_state()
 
-    def toggle_marker(self):
+    def toggle_marker(self, symbol):
         """Toggle marker state for robot drawing."""
-        self.marker_state = 45 if self.marker_state == 135 else 135
+        self.marker_state = 45 if symbol == 'O' else 135 if symbol == 'X' else 90
         self.ser.write(f"{self.marker_state}\n".encode())
         self.get_logger().info(f"Marker state set to {self.marker_state}")
 
@@ -495,6 +495,8 @@ class TicTacToeNode(Node):
             self.publish_game_state()
 
             if not self.game.game_over and self.game.current_player == self.ai_player:
+                if self.enable_serial:
+                    self.toggle_marker(self.ai_symbol)
                 self.make_ai_move()
 
             self.check_game_end()
@@ -601,7 +603,7 @@ class TicTacToeNode(Node):
                     if cell:
                         row, col = cell
                         if self.enable_serial:
-                            self.toggle_marker()
+                            self.toggle_marker(self.human_symbol)
                         self.make_human_move(row, col)
 
         self.ui.draw_board(self.game)
