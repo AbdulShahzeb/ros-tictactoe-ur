@@ -19,9 +19,9 @@ public:
     // Fill out the transformation stamped message
     transformStamped_.header.frame_id = "base_link";
     transformStamped_.child_frame_id = "camera_depth_optical_frame";
-    transformStamped_.transform.translation.x = 0.85;
-    transformStamped_.transform.translation.y = 0.24;
-    transformStamped_.transform.translation.z = 0.92;
+    transformStamped_.transform.translation.x = 0.850;
+    transformStamped_.transform.translation.y = 0.231;
+    transformStamped_.transform.translation.z = 0.912;
 
     tf2::Quaternion q;
     q.setRPY(M_PI, 0, M_PI);
