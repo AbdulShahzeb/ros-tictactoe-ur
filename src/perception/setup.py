@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'grid_detector_node = perception.grid_detector:main',
             'grid_vision_node = perception.grid_vision:main',
+            'publish_grid_pose = perception.publish_grid_pose:main',
         ],
     },
 )

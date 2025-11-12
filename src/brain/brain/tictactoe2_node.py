@@ -346,10 +346,11 @@ class TicTacToeNode(Node):
         ]
 
         # Vision-based move detection
-        self.current_colors = [0] * 9
-        self.pending_human_move = None
-        self.pending_move_timestamp = None
-        self.CONFIRMATION_TIME = 3.0  # 3 seconds to confirm move
+        self.UPDATE_FREQUENCY = 6.0 # Hz
+        self.CONFIRMATION_TIME = 3.0 # seconds
+        self.WINDOW_SIZE = int(self.UPDATE_FREQUENCY * self.CONFIRMATION_TIME)
+        self.CONFIRMATION_THRESHOLD = 0.8
+        self.cell_observations = [ [] for _ in range(9) ]
 
         self.draw_action_client = ActionClient(
             self, DrawShape, "manipulation/draw_shape"
@@ -366,9 +367,6 @@ class TicTacToeNode(Node):
 
         # Timer for pygame event processing
         self.timer = self.create_timer(0.016, self.process_ui)  # ~60 FPS
-
-        # Timer for checking confirmed moves
-        self.move_check_timer = self.create_timer(0.1, self.check_pending_move)
 
         self.get_logger().info(
             f"TicTacToe game started - Human ({self.human_symbol}) vs AI ({self.ai_symbol})"
@@ -465,11 +463,6 @@ class TicTacToeNode(Node):
             row, col = self._pending_move
             self.game.make_move(row, col)
             self.publish_game_state()
-
-            # Update current_colors to match game board after AI move
-            cell_idx = row * 3 + col
-            self.current_colors[cell_idx] = self.ai_player
-
             self.check_game_end()
 
             # If game not over and it's human's turn, wait for their move
@@ -531,9 +524,7 @@ class TicTacToeNode(Node):
     def reset_game(self):
         """Reset the game for a new round."""
         self.game.reset()
-        self.current_colors = [0] * 9
-        self.pending_human_move = None
-        self.pending_move_timestamp = None
+        self.cell_observations = [ [] for _ in range(9) ]
         self.publish_game_state()
         self.publish_game_status("New game started")
         self.get_logger().info("Game reset")
@@ -546,8 +537,7 @@ class TicTacToeNode(Node):
 
     def grid_poses_callback(self, msg):
         """
-        Receives board state from perception node.
-        Detects new human moves from the colors array.
+        Receives board state from perception node and detects new human moves.
         """
         self.grid_poses = msg.poses
 
@@ -563,79 +553,42 @@ class TicTacToeNode(Node):
 
         # Check for new human moves
         for i in range(9):
-            # Skip if this position hasn't changed
-            if new_colors[i] == self.current_colors[i]:
-                continue
 
             # Skip if cell is already occupied in game
             row, col = divmod(i, 3)
             if self.game.board[row, col] != 0:
+                self.cell_observations[i].clear()
                 continue
 
-            # Check if this is a human move
-            if new_colors[i] == self.human_player:
-                # New human move detected
-                if self.pending_human_move != (row, col):
-                    self.pending_human_move = (row, col)
-                    self.pending_move_timestamp = time.time()
+            self.cell_observations[i].append(new_colors[i])
+            if len(self.cell_observations[i]) > self.WINDOW_SIZE:
+                self.cell_observations[i].pop(0)
+
+            # Check if we have enough observations
+            if len(self.cell_observations[i]) >= self.WINDOW_SIZE:
+                human_count = self.cell_observations[i].count(self.human_player)
+                confidence = human_count / len(self.cell_observations[i])
+
+                if confidence >= self.CONFIRMATION_THRESHOLD:
                     self.get_logger().info(
-                        f"Human move detected at ({row}, {col}), confirming for {self.CONFIRMATION_TIME}s..."
+                        f"Detected stable human move at ({row}, {col}) with confidence {confidence:.1f}"
                     )
-                break
+                    
+                    # Register the move
+                    self.game.make_move(row, col)
+                    self.publish_game_state()
+                    self.cell_observations = [ [] for _ in range(9) ]
+                    self.check_game_end()
 
-    def check_pending_move(self):
-        """
-        Check if a pending human move has been stable for CONFIRMATION_TIME seconds.
-        If so, register it and trigger AI response.
-        """
-        if self.pending_human_move is None:
-            return
+                    # If game not over, AI makes its move
+                    if (
+                        not self.game.game_over
+                        and self.game.current_player == self.ai_player
+                    ):
+                        self.make_ai_move()
+                    break
 
-        if self.pending_move_timestamp is None:
-            return
 
-        # Check if move has been stable for required time
-        elapsed = time.time() - self.pending_move_timestamp
-        if elapsed >= self.CONFIRMATION_TIME:
-            row, col = self.pending_human_move
-
-            # Verify the move is still valid
-            if (
-                not self.game.game_over
-                and self.game.current_player == self.human_player
-                and self.game.board[row, col] == 0
-            ):
-
-                self.get_logger().info(f"Human move confirmed at ({row}, {col})")
-
-                # Register the move
-                self.game.make_move(row, col)
-                self.publish_game_state()
-
-                # Update current_colors
-                cell_idx = row * 3 + col
-                self.current_colors[cell_idx] = self.human_player
-
-                # Clear pending move
-                self.pending_human_move = None
-                self.pending_move_timestamp = None
-
-                # Check if game ended
-                self.check_game_end()
-
-                # If game not over, AI makes its move
-                if (
-                    not self.game.game_over
-                    and self.game.current_player == self.ai_player
-                ):
-                    self.make_ai_move()
-            else:
-                # Move is no longer valid, clear it
-                self.get_logger().warn(
-                    f"Pending move at ({row}, {col}) is no longer valid"
-                )
-                self.pending_human_move = None
-                self.pending_move_timestamp = None
 
     def process_ui(self):
         """Process pygame events (called by timer)."""
