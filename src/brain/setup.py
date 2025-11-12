@@ -28,7 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'tictactoe_node = brain.tictactoe_node:main',
+            'brain_node = brain.brain_node:main',
             'keyboard_node = brain.keyboard_node:main',
         ],
     },

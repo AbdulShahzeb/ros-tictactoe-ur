@@ -5,13 +5,10 @@ Launch file for TicTacToe game node.
 
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
-from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
-from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -40,26 +37,16 @@ def generate_launch_description():
         description='Path to O agent model file'
     )
 
-    # RealSense
-    '''realsense_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            os.path.join(FindPackageShare('realsense2_camera').find('realsense2_camera'), 'launch'),
-            '/rs_launch.py'
-        ]),
-        condition=IfCondition(LaunchConfiguration('enable_camera'))
-    )'''
-
-    # TicTacToe node
-    tictactoe_node = Node(
+    # Brain node
+    brain_node = Node(
         package='brain',
-        executable='tictactoe_node',
-        name='tictactoe_node',
+        executable='brain_node',
+        name='brain_node',
         output='screen',
         parameters=[{
             'player': LaunchConfiguration('player'),
             'agent_x_file': LaunchConfiguration('agent_x_file'),
             'agent_o_file': LaunchConfiguration('agent_o_file'),
-            'enable_serial': False
         }]
     )
 
@@ -104,9 +91,8 @@ def generate_launch_description():
         player_arg,
         agent_x_file_arg,
         agent_o_file_arg,
-        tictactoe_node,
+        brain_node,
         keyboard_node,
         grid_vision_node,
-        #realsense_launch,
         static_transform_node,
     ])

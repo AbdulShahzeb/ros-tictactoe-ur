@@ -676,6 +676,8 @@ class GridVisionNode(Node):
 
     def log_callback(self, msg):
         self.toggle_log = not self.toggle_log
+        status = "enabled" if self.toggle_log else "disabled"
+        self.get_logger().info(f"Logging {status} via keyboard node")
 
     def shutdown_callback(self, msg):
         """Shuts down the Grid Vision Node"""
