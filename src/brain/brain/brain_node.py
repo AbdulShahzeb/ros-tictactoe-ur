@@ -328,6 +328,11 @@ class TicTacToeNode(Node):
         )
         self.shutdown_requested = False
 
+        self.toggle_log_sub = self.create_subscription(
+            Bool, "/kb/toggle_log", self.toggle_log_callback, 10
+        )
+        self.toggle_log = True
+
         self.grid_poses_sub = self.create_subscription(
             GridPose, "perception/cell_poses", self.grid_poses_callback, 10
         )
@@ -397,9 +402,10 @@ class TicTacToeNode(Node):
         if ai_move:
             row, col = ai_move
 
-            self.get_logger().info(
-                f"AI ({self.ai_symbol}) playing row={row}, col={col}"
-            )
+            if self.toggle_log:
+                self.get_logger().info(
+                    f"AI ({self.ai_symbol}) selected move at row={row}, col={col}"
+                )
 
             self.send_draw_shape_goal(row, col, self.ai_symbol)
 
@@ -426,7 +432,8 @@ class TicTacToeNode(Node):
         goal_msg.shape = shape
         goal_msg.constraints_identifier = self._constraint
 
-        self.get_logger().info(f"Sending goal: Draw {shape} at cell {cell_number}")
+        if self.toggle_log:
+            self.get_logger().info(f"Sending goal: Draw {shape} at cell {cell_number}")
 
         # Send goal with callbacks
         self._send_goal_future = self.draw_action_client.send_goal_async(
@@ -442,16 +449,18 @@ class TicTacToeNode(Node):
             self.waiting_for_robot = False
             return
 
-        self.get_logger().info("Goal accepted, waiting for result...")
+        if self.toggle_log:
+            self.get_logger().info("Goal accepted, waiting for result...")
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.draw_result_callback)
 
     def draw_feedback_callback(self, feedback_msg):
         """Handle feedback from action server."""
         feedback = feedback_msg.feedback
-        self.get_logger().info(
-            f"Drawing progress: {feedback.status} - {feedback.progress:.1%}"
-        )
+        if self.toggle_log:
+            self.get_logger().info(
+                f"Drawing progress: {feedback.status} - {feedback.progress:.1%}"
+            )
 
     def draw_result_callback(self, future):
         """Handle action completion."""
@@ -459,7 +468,8 @@ class TicTacToeNode(Node):
         self.waiting_for_robot = False
 
         if result.success and self._pending_move:
-            self.get_logger().info(f"Drawing completed: {result.message}")
+            if self.toggle_log:
+                self.get_logger().info(f"Drawing completed: {result.message}")
             row, col = self._pending_move
             self.game.make_move(row, col)
             self.publish_game_state()
@@ -471,8 +481,12 @@ class TicTacToeNode(Node):
                 and self.game.current_player == self.human_player
             ):
                 self.get_logger().info("Waiting for human move...")
-        else:
-            self.get_logger().error(f"Drawing failed: {result.message}")
+        elif self._pending_move:
+            self.get_logger().error(f"Drawing failed: {result.message}. Retrying...")
+            # Retry the move
+            row, col = self._pending_move
+            self.send_draw_shape_goal(row, col, self.ai_symbol)
+
 
     def check_game_end(self):
         """Check if game ended and update statistics."""
@@ -570,10 +584,11 @@ class TicTacToeNode(Node):
                 confidence = human_count / len(self.cell_observations[i])
 
                 if confidence >= self.CONFIRMATION_THRESHOLD:
-                    self.get_logger().info(
-                        f"Detected stable human move at ({row}, {col}) with confidence {confidence:.1f}"
-                    )
-                    
+                    if self.toggle_log:
+                        self.get_logger().info(
+                            f"Detected stable human move at ({row}, {col}) with confidence {confidence:.1f}"
+                        )
+
                     # Register the move
                     self.game.make_move(row, col)
                     self.publish_game_state()
@@ -644,6 +659,11 @@ class TicTacToeNode(Node):
         self.cleanup()
         self.shutdown_requested = True
 
+    def toggle_log_callback(self, msg):
+        """Handle toggle log request from keyboard node."""
+        self.toggle_log = not self.toggle_log
+        status = "enabled" if self.toggle_log else "disabled"
+        self.get_logger().info(f"Logging {status} via keyboard node")
 
 def main(args=None):
     rclpy.init(args=args)
