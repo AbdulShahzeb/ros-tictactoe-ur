@@ -351,11 +351,11 @@ class TicTacToeNode(Node):
         ]
 
         # Vision-based move detection
-        self.UPDATE_FREQUENCY = 6.0 # Hz
-        self.CONFIRMATION_TIME = 3.0 # seconds
+        self.UPDATE_FREQUENCY = 6.0  # Hz
+        self.CONFIRMATION_TIME = 3.0  # seconds
         self.WINDOW_SIZE = int(self.UPDATE_FREQUENCY * self.CONFIRMATION_TIME)
         self.CONFIRMATION_THRESHOLD = 0.8
-        self.cell_observations = [ [] for _ in range(9) ]
+        self.cell_observations = [[] for _ in range(9)]
 
         self.draw_action_client = ActionClient(
             self, DrawShape, "manipulation/draw_shape"
@@ -487,7 +487,6 @@ class TicTacToeNode(Node):
             row, col = self._pending_move
             self.send_draw_shape_goal(row, col, self.ai_symbol)
 
-
     def check_game_end(self):
         """Check if game ended and update statistics."""
         if self.game.game_over:
@@ -538,7 +537,7 @@ class TicTacToeNode(Node):
     def reset_game(self):
         """Reset the game for a new round."""
         self.game.reset()
-        self.cell_observations = [ [] for _ in range(9) ]
+        self.cell_observations = [[] for _ in range(9)]
         self.publish_game_state()
         self.publish_game_status("New game started")
         self.get_logger().info("Game reset")
@@ -592,7 +591,7 @@ class TicTacToeNode(Node):
                     # Register the move
                     self.game.make_move(row, col)
                     self.publish_game_state()
-                    self.cell_observations = [ [] for _ in range(9) ]
+                    self.cell_observations = [[] for _ in range(9)]
                     self.check_game_end()
 
                     # If game not over, AI makes its move
@@ -602,8 +601,6 @@ class TicTacToeNode(Node):
                     ):
                         self.make_ai_move()
                     break
-
-
 
     def process_ui(self):
         """Process pygame events (called by timer)."""
@@ -664,6 +661,7 @@ class TicTacToeNode(Node):
         self.toggle_log = not self.toggle_log
         status = "enabled" if self.toggle_log else "disabled"
         self.get_logger().info(f"Logging {status} via keyboard node")
+
 
 def main(args=None):
     rclpy.init(args=args)

@@ -64,9 +64,9 @@ class MoveitServer {
         service_ =
             node_->create_service<helper::srv::MoveRequest>("/moveit_path_plan", std::bind(&MoveitServer::handle_request, this, _1, _2));
 
-        action_server_ = rclcpp_action::create_server<DrawShape>(node_, "manipulation/draw_shape", std::bind(&MoveitServer::handle_goal, this, _1, _2),
-                                                                 std::bind(&MoveitServer::handle_cancel, this, _1),
-                                                                 std::bind(&MoveitServer::handle_accepted, this, _1));
+        action_server_ = rclcpp_action::create_server<DrawShape>(
+            node_, "manipulation/draw_shape", std::bind(&MoveitServer::handle_goal, this, _1, _2),
+            std::bind(&MoveitServer::handle_cancel, this, _1), std::bind(&MoveitServer::handle_accepted, this, _1));
 
         RCLCPP_INFO(node_->get_logger(), "MoveIt Server is ready.");
         return_home();

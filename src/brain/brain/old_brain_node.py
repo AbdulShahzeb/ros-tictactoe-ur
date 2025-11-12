@@ -362,13 +362,14 @@ class TicTacToeNode(Node):
             Pose2D(x=0.65, y=0.17, theta=78.87),
         ]
 
-
         self.draw_action_client = ActionClient(
             self, DrawShape, "manipulation/draw_shape"
         )
         self.waiting_for_robot = False
         self._pending_move = None
-        self._constraint = 'ORIEN' if os.environ.get("ROS_DISTRO", "").lower() == "humble" else 'NONE'
+        self._constraint = (
+            "ORIEN" if os.environ.get("ROS_DISTRO", "").lower() == "humble" else "NONE"
+        )
 
         # Pygame UI
         self.ui = TicTacToeUI(self.human_player)
@@ -389,7 +390,7 @@ class TicTacToeNode(Node):
 
     def toggle_marker(self, symbol):
         """Toggle marker state for robot drawing."""
-        self.marker_state = 45 if symbol == 'O' else 135 if symbol == 'X' else 90
+        self.marker_state = 45 if symbol == "O" else 135 if symbol == "X" else 90
         self.ser.write(f"{self.marker_state}\n".encode())
         self.get_logger().info(f"Marker state set to {self.marker_state}")
 

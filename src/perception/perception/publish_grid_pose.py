@@ -38,7 +38,7 @@ class GridPosePublisher(Node):
                 user_input = input("Enter cmd: ")
                 if user_input.lower() == "n":
                     self.noise_mode = not self.noise_mode
-                    self.colors = [0] * 9   # Reset colors when toggling noise
+                    self.colors = [0] * 9  # Reset colors when toggling noise
                     self.get_logger().info(
                         f"Noise mode {'enabled' if self.noise_mode else 'disabled'}."
                     )
