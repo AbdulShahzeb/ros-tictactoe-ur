@@ -5,7 +5,7 @@ Launch file for TicTacToe game node.
 
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -87,11 +87,17 @@ def generate_launch_description():
         prefix='xterm -e'
     )
 
+    # Delay for Brain
+    delay_brain = TimerAction(
+        period=3.0,
+        actions=[brain_node]
+    )
+
     return LaunchDescription([
         player_arg,
         agent_x_file_arg,
         agent_o_file_arg,
-        brain_node,
+        delay_brain,
         keyboard_node,
         grid_vision_node,
         static_transform_node,

@@ -522,8 +522,8 @@ class GridVisionNode(Node):
         MIN_PIXELS_FLOOR = 10
 
         # HSV thresholds for blue and red
-        BLUE_LOWER = (90, 80, 50)
-        BLUE_UPPER = (140, 255, 255)
+        BLUE_LOWER = (100, 150, 60)
+        BLUE_UPPER = (150, 255, 255)
         RED1_LOWER = (0, 80, 60)
         RED1_UPPER = (10, 255, 255)
         RED2_LOWER = (120, 25, 60)

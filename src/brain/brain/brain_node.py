@@ -8,7 +8,6 @@ import numpy as np
 import pygame
 import os
 from typing import Optional, Tuple, List
-import time
 
 import rclpy
 from rclpy.node import Node
