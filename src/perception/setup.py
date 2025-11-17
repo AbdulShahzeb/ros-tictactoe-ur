@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'grid_vision_node = perception.grid_vision:main',
+            'grid_vision_node = perception.grid_vision2:main',
             'publish_grid_pose = perception.publish_grid_pose:main',
         ],
     },
