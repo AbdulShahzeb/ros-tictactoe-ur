@@ -50,23 +50,23 @@ def generate_launch_description():
         }]
     )
 
-    # Grid Vision Node
-    grid_vision_node = Node(
+    # Aruco Vision Node
+    aruco_vision_node = Node(
         package='perception',
-        executable='grid_vision_node',
-        name='grid_vision_node',
+        executable='aruco_vision_node',
+        name='aruco_vision_node',
         output='screen',
         parameters=[{
-            'exposure': 90,
-            'corner0_x': 0.8315,
-            'corner0_y': -0.0909,
-            'corner1_x': 0.8315,
-            'corner1_y': 0.5000,
-            'corner2_x': 0.2625,
-            'corner2_y': -0.0912,
-            'corner3_x': 0.2625,
-            'corner3_y': 0.5000
+            'exposure': 90
         }]
+    )
+
+    # Cell Vision Node
+    cell_vision_node = Node(
+        package='perception',
+        executable='cell_vision_node',
+        name='cell_vision_node',
+        output='screen',
     )
 
     # Static Transform
@@ -99,6 +99,7 @@ def generate_launch_description():
         agent_o_file_arg,
         delay_brain,
         keyboard_node,
-        grid_vision_node,
+        aruco_vision_node,
+        cell_vision_node,
         static_transform_node,
     ])
