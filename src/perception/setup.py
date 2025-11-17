@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'perception'
 
@@ -10,6 +12,12 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        # Include meshes
+        (os.path.join('share', package_name, 'meshes'), 
+            glob('meshes/*.stl')),
+        # Include launch files
+        (os.path.join('share', package_name, 'launch'), 
+            glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,7 +32,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'grid_vision_node = perception.grid_vision2:main',
+            'aruco_vision_node = perception.aruco_vision:main',
+            'cell_vision_node = perception.cell_vision:main',
             'publish_grid_pose = perception.publish_grid_pose:main',
         ],
     },
