@@ -29,7 +29,7 @@ class ArucoVisionNode(Node):
         self.detector_params = cv2.aruco.DetectorParameters()
 
         # --- Declare and get ROS parameters ---
-        self.declare_parameter("exposure", 90)
+        self.declare_parameter("exposure", 120)
         self.exposure = (
             self.get_parameter("exposure").get_parameter_value().integer_value
         )
@@ -71,6 +71,11 @@ class ArucoVisionNode(Node):
             Bool, "/kb/toggle_log", self.log_callback, 10
         )
         self.toggle_log = False
+
+        self.enable_prelim_cv_sub = self.create_subscription(
+            Bool, "/kb/enable_prelim_cv", self.enable_prelim_cv_callback, 10
+        )
+        self.prelim_cv_enabled = False
 
         self.shutdown_sub = self.create_subscription(
             Bool, "/kb/shutdown", self.shutdown_callback, 10
@@ -168,6 +173,12 @@ class ArucoVisionNode(Node):
                 self.exposure_param_timer.cancel()
                 self.exposure_param_timer = None
 
+    def enable_prelim_cv_callback(self, msg):
+        """Enable preliminary CV window display"""
+        self.prelim_cv_enabled = not self.prelim_cv_enabled
+        if not self.prelim_cv_enabled:
+            cv2.destroyWindow("Aruco Detection")
+
     # ===============================================================
     #   ArUco detection
     # ===============================================================
@@ -212,7 +223,8 @@ class ArucoVisionNode(Node):
                 else:
                     self.get_logger().warn("Homography matrix is None")
 
-        cv2.imshow("Aruco Detection", frame)
+        if self.prelim_cv_enabled:
+            cv2.imshow("Aruco Detection", frame)
         cv2.waitKey(1)
 
     def get_grid_corners(self, ids, corners):

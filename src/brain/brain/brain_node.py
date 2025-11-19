@@ -320,6 +320,7 @@ class TicTacToeNode(Node):
         self.game_state_pub = self.create_publisher(Int32MultiArray, "game_state", 10)
         self.move_request_pub = self.create_publisher(Int32, "robot_move_request", 10)
         self.game_status_pub = self.create_publisher(String, "game_status", 10)
+        self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
 
         # Subscribers
         self.shutdown_sub = self.create_subscription(
@@ -330,7 +331,7 @@ class TicTacToeNode(Node):
         self.toggle_log_sub = self.create_subscription(
             Bool, "/kb/toggle_log", self.toggle_log_callback, 10
         )
-        self.toggle_log = True
+        self.toggle_log = False
 
         self.grid_poses_sub = self.create_subscription(
             GridPose, "perception/cell_poses", self.grid_poses_callback, 10
@@ -562,6 +563,9 @@ class TicTacToeNode(Node):
             return
 
         new_colors = list(msg.colors)
+        if len(new_colors) != 9:
+            self.get_logger().warn("Received invalid grid colors from perception")
+            return
 
         # Check for new human moves
         for i in range(9):
@@ -608,7 +612,7 @@ class TicTacToeNode(Node):
             if event.type == pygame.QUIT:
                 self.get_logger().info("UI closed, shutting down node")
                 pygame.quit()
-                self.shutdown_requested = True
+                self.shutdown_pub.publish(Bool(data=True))
                 return
 
             elif event.type == pygame.KEYDOWN:
@@ -617,7 +621,7 @@ class TicTacToeNode(Node):
                 elif event.key == pygame.K_q:
                     self.get_logger().info("Quit requested, shutting down node")
                     pygame.quit()
-                    self.shutdown_requested = True
+                    self.shutdown_pub.publish(Bool(data=True))
                     return
 
         self.ui.draw_board(self.game, self.waiting_for_robot)

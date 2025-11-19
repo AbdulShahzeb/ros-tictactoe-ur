@@ -2,6 +2,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool
 from time import sleep
+import sys
+import select
 
 
 class KeyboardNode(Node):
@@ -11,12 +13,18 @@ class KeyboardNode(Node):
 
         self.toggle_log_pub = self.create_publisher(Bool, "/kb/toggle_log", 10)
         self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
+        self.enable_prelim_cv_pub = self.create_publisher(Bool, "/kb/enable_prelim_cv", 10)
+        self.shutdown_sub = self.create_subscription(
+            Bool, "/kb/shutdown", self.shutdown_callback, 10
+        )
+        self.shutdown_requested = False
 
         self.get_logger().info(
             "\n"
             "-----------------------------------\n"
             "Keyboard Input Node is running.\n"
             "Press 'l' then Enter to toggle vision node logging.\n"
+            "Press 'i' then Enter to enable preliminary CV window.\n"
             "Press 'q' then Enter to quit.\n"
             "-----------------------------------"
         )
@@ -24,33 +32,53 @@ class KeyboardNode(Node):
         self.main_loop()
 
     def main_loop(self):
-        while rclpy.ok():
-            try:
-                user_input = input("Enter command: ")
-                if user_input == "l":
-                    self.get_logger().info(
-                        "User pressed 'l'. Sending LOG toggle signal to grid_vision_node."
-                    )
+        while rclpy.ok() and not self.shutdown_requested:
+            rclpy.spin_once(self, timeout_sec=0.1)
 
-                    log_msg = Bool()
-                    log_msg.data = True
-                    self.toggle_log_pub.publish(log_msg)
+            if self.shutdown_requested:
+                break
 
-                elif user_input == "q":
-                    self.get_logger().info("User pressed 'q'. Shutting down.")
+            if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                try:
+                    user_input = input("Enter command: ")
+                    if user_input == "l":
+                        self.get_logger().info(
+                            "User pressed 'l'. Sending LOG toggle signal to grid_vision_node."
+                        )
 
-                    shutdown_msg = Bool()
-                    shutdown_msg.data = True
-                    self.shutdown_pub.publish(shutdown_msg)
+                        log_msg = Bool()
+                        log_msg.data = True
+                        self.toggle_log_pub.publish(log_msg)
 
-                    sleep(0.5)
+                    elif user_input == "i":
+                        self.get_logger().info(
+                            "User pressed 'i'. Toggling preliminary CV window."
+                        )
+
+                        prelim_msg = Bool()
+                        prelim_msg.data = True
+                        self.enable_prelim_cv_pub.publish(prelim_msg)
+                    
+                    elif user_input == "q":
+                        self.get_logger().info("User pressed 'q'. Shutting down.")
+
+                        shutdown_msg = Bool()
+                        shutdown_msg.data = True
+                        self.shutdown_pub.publish(shutdown_msg)
+
+                        sleep(0.5)
+                        break
+
+                    else:
+                        self.get_logger().warn(f"Unknown command: '{user_input}'")
+
+                except EOFError:
                     break
 
-                else:
-                    self.get_logger().warn(f"Unknown command: '{user_input}'")
-
-            except EOFError:
-                break
+    def shutdown_callback(self, msg):
+        if msg.data:
+            self.get_logger().info("Shutdown signal received.")
+            self.shutdown_requested = True
 
 
 def main(args=None):

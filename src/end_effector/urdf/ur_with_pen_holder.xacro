@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ur_with_pen_holder">
+
+  <!-- Import the UR5e description -->
+  <xacro:arg name="name" default="ur5e"/>
+  <xacro:arg name="ur_type" default="ur5e"/>
+  <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro"/>
+  
+  <!-- Import the pen_holder -->
+  <xacro:include filename="$(find end_effector)/urdf/pen_holder.xacro"/>
+
+  <!-- Simple rectangular end-effector -->
+  <link name="pen_holder">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>  <!-- Length, Width, Height -->
+      </geometry>
+      <material name="orange">
+        <color rgba="1.025 0.5 0.0 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.1025 0.1 0.1"/>  <!-- Must match visual -->
+      </geometry>
+    </collision>
+    <inertial>
+    <mass value="2.0"/>  <!-- 2kg mass -->
+    <!-- Calculated inertia for a rectangular prism -->
+    <inertia 
+      ixx="0.01625" ixy="0.0" ixz="0.0"
+      iyy="0.0085" iyz="0.0"
+      izz="0.00425"/>
+  </inertial>
+  </link>
+
+  <!-- Fixed joint attaching to tool0 -->
+  <joint name="simple_ee_joint" type="fixed">
+    <parent link="tool0"/>
+    <child link="pen_holder"/>
+    <origin xyz="0.013 -0.0325 0.055" rpy="0 0 0"/>  <!-- 1cm offset from tool0 -->
+
+  </joint>
+
+</robot>

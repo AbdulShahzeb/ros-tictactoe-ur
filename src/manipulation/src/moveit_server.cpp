@@ -42,10 +42,10 @@ class MoveitServer {
 
         // Drawing parameters
         node_->declare_parameter("cell_size", 0.05);
-        node_->declare_parameter("drawing_height", 0.170);
+        node_->declare_parameter("drawing_height", 0.016);
         node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
-        node_->declare_parameter("x_offset", -0.065);
-        node_->declare_parameter("y_offset", 0.020);
+        node_->declare_parameter("x_offset", 0.0);
+        node_->declare_parameter("y_offset", 0.0);
         node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -103.5, 106.1, -92.6, -90.0, 0.0});
 
         setupCollisionObjects();
@@ -58,6 +58,7 @@ class MoveitServer {
         // move_group_->setPlannerId("RRTConnectkConfigDefault");
         // move_group_->setPlannerId("BKPIECEkConfigDefault");
         move_group_->setPlannerId("TRRTkConfigDefault");
+        move_group_->setEndEffectorLink("pen_holder");
         move_group_->setMaxVelocityScalingFactor(0.1);
         move_group_->setMaxAccelerationScalingFactor(0.1);
 
