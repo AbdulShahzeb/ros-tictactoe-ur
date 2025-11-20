@@ -2,8 +2,6 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
-from rcl_interfaces.srv import SetParameters
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Header
 from geometry_msgs.msg import Pose2D, PoseStamped
@@ -41,7 +39,11 @@ class CellVision(Node):
         self.cell_poses_pub = self.create_publisher(GridPose, "/perception/cell_poses", 10)
         self.cell_marker_pub = self.create_publisher(MarkerArray, "/perception/cell_markers", 10)
 
-    
+        # Meshes
+        self.x_mesh_path = "package://perception/meshes/x.stl"
+        self.o_mesh_path = "package://perception/meshes/o.stl"
+        self.mesh_scale = 0.005
+
     # ===============================================================
     #   Helper Functions
     # ===============================================================
@@ -102,7 +104,7 @@ class CellVision(Node):
         MIN_PIXELS_FLOOR = 10
 
         # HSV thresholds for blue and red
-        BLUE_LOWER = (90, 80, 60)
+        BLUE_LOWER = (90, 100, 60)
         BLUE_UPPER = (150, 255, 255)
         RED1_LOWER = (0, 80, 60)
         RED1_UPPER = (10, 255, 255)
@@ -230,7 +232,7 @@ class CellVision(Node):
             marker.header.stamp = time
             marker.ns = "cell_markers"
             marker.id = i
-            marker.type = Marker.CYLINDER
+            marker.type = Marker.MESH_RESOURCE
             
             if color_codes[i] == 0:
                 # Delete marker if cell is empty
@@ -241,9 +243,11 @@ class CellVision(Node):
                 marker.pose.position.y = y
                 marker.pose.position.z = 0.0
                 marker.pose.orientation.w = 1.0
-                marker.scale.x = self.cell_size_mm * 0.001
-                marker.scale.y = self.cell_size_mm * 0.001
-                marker.scale.z = 0.01
+                marker.scale.x = self.mesh_scale
+                marker.scale.y = self.mesh_scale
+                marker.scale.z = 0.001
+                marker.mesh_resource = self.x_mesh_path if color_codes[i] == 1 else self.o_mesh_path
+                marker.mesh_use_embedded_materials = False
 
                 # Set color based on detected color code
                 if color_codes[i] == 1:  # Blue

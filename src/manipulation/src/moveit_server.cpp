@@ -511,7 +511,7 @@ class MoveitServer {
         // Get parameters
         double drawing_height = node_->get_parameter("drawing_height").as_double();
         double lift_height = node_->get_parameter("lift_height").as_double();
-        double x_offset = node_->get_parameter("x_offset").as_double();
+        double x_offset = node_->get_parameter("x_offset").as_double() * -1;  // Invert for erasing
         double y_offset = node_->get_parameter("y_offset").as_double();
         double erase_offset = node_->get_parameter("erase_offset").as_double();
         double grid_theta = cell_poses[0].theta;

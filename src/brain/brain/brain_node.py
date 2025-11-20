@@ -17,6 +17,14 @@ from geometry_msgs.msg import Pose2D
 from helper.msg import GridPose
 from helper.action import DrawShape, EraseGrid
 from ament_index_python.packages import get_package_share_directory
+import serial
+from enum import Enum, auto
+
+
+class EndEffectorState(Enum):
+    MARKER = 45
+    MIDDLE = 90
+    ERASER = 135
 
 
 def encode_board_base3(board_array: np.ndarray) -> int:
@@ -282,15 +290,18 @@ class TicTacToeNode(Node):
         self.declare_parameter(
             "agent_o_file", os.path.join(package_dir, "models", "menace_agent_o.npy")
         )
+        self.declare_parameter("enable_serial", False)
 
         # Get parameters
         player_str = self.get_parameter("player").value
         agent_x_file = self.get_parameter("agent_x_file").value
         agent_o_file = self.get_parameter("agent_o_file").value
+        self.enable_serial = self.get_parameter("enable_serial").value
 
         # Game setup
         self.human_player = 1 if player_str.lower() == "x" else -1
         self.ai_player = -self.human_player
+        self.end_effector_state = EndEffectorState.MARKER
 
         # Load AI agent
         if self.ai_player == 1:
@@ -321,6 +332,13 @@ class TicTacToeNode(Node):
         self.move_request_pub = self.create_publisher(Int32, "robot_move_request", 10)
         self.game_status_pub = self.create_publisher(String, "game_status", 10)
         self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
+        if self.enable_serial:
+            try:
+                self.ser = serial.Serial("/dev/ttyACM0", 9600, timeout=1)
+                self.ser.write(f"{self.end_effector_state.value}\n".encode())
+            except serial.SerialException as e:
+                self.get_logger().error(f"Failed to open serial port: {e}")
+                self.enable_serial = False
 
         # Subscribers
         self.shutdown_sub = self.create_subscription(
@@ -507,7 +525,7 @@ class TicTacToeNode(Node):
 
         # Create goal with 6 poses: TL, TR, MR, ML, BL, BR
         goal_msg = EraseGrid.Goal()
-        goal_msg.poses = [
+        goal_msg.cell_poses = [
             self.grid_poses[0],  # TL
             self.grid_poses[2],  # TR
             self.grid_poses[5],  # MR
@@ -612,6 +630,9 @@ class TicTacToeNode(Node):
         self.publish_game_state()
         self.publish_game_status("New game started")
         self.get_logger().info("Game reset")
+        if self.enable_serial:
+            self.end_effector_state = EndEffectorState.MARKER
+            self.ser.write(f"{self.end_effector_state.value}\n".encode())
 
         # If AI goes first, make its move
         if self.ai_player == 1 and not self.game.game_over:
@@ -692,6 +713,9 @@ class TicTacToeNode(Node):
                         self.get_logger().info("Robot is busy. Please wait...")
                         continue
                     self.get_logger().info("Reset requested, resetting game")
+                    if self.enable_serial:
+                        self.end_effector_state = EndEffectorState.ERASER
+                        self.ser.write(f"{self.end_effector_state.value}\n".encode())
                     self.send_erase_grid_goal()
                     self.reset_game()
                 elif event.key == pygame.K_q:
@@ -752,6 +776,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        if node.enable_serial:
+            node.ser.write(f"{EndEffectorState.MIDDLE.value}\n".encode())
         node.destroy_node()
         rclpy.shutdown()
 

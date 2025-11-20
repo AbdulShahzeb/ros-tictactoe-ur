@@ -39,7 +39,7 @@ def generate_launch_description():
         description='Path to O agent model file'
     )
 
-    use_fake = False
+    use_fake = True
     ip_address = "192.168.56.101"
     if not use_fake:
         ip_address = "192.168.0.100"
@@ -56,6 +56,15 @@ def generate_launch_description():
 
 
     # Launch UR driver
+    ur_control_launch_args = {
+        'ur_type': 'ur5e',
+        'robot_ip': ip_address,
+        'launch_rviz': 'false',
+        'kinematics_params': kinematics_params_file,
+    }
+    if not use_fake:
+        ur_control_launch_args['description_file'] = description_file
+
     ur_control_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
@@ -64,13 +73,7 @@ def generate_launch_description():
                 'ur_control.launch.py'
             ])
         ]),
-        launch_arguments={
-            'ur_type': 'ur5e',
-            'robot_ip': ip_address,
-            'launch_rviz': 'false',
-            'description_file': description_file,
-            'kinematics_params': kinematics_params_file,
-        }.items()
+        launch_arguments=ur_control_launch_args.items()
     )
 
     # Launch MoveIt
@@ -120,6 +123,7 @@ def generate_launch_description():
             'player': LaunchConfiguration('player'),
             'agent_x_file': LaunchConfiguration('agent_x_file'),
             'agent_o_file': LaunchConfiguration('agent_o_file'),
+            'enable_serial': False,
         }]
     )
 
