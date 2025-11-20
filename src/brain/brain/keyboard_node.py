@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int32
 from time import sleep
 import sys
 import select
@@ -12,6 +12,7 @@ class KeyboardNode(Node):
         super().__init__("keyboard_node")
 
         self.toggle_log_pub = self.create_publisher(Bool, "/kb/toggle_log", 10)
+        self.set_min_blue_sat_pub = self.create_publisher(Int32, "/kb/set_min_blue_sat", 10)
         self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
         self.enable_prelim_cv_pub = self.create_publisher(Bool, "/kb/enable_prelim_cv", 10)
         self.shutdown_sub = self.create_subscription(
@@ -59,6 +60,20 @@ class KeyboardNode(Node):
                         prelim_msg.data = True
                         self.enable_prelim_cv_pub.publish(prelim_msg)
                     
+                    elif user_input.startswith("s"):
+                        try:
+                            _, value_str = user_input.split()
+                            value = int(value_str)
+                            self.get_logger().info(
+                                f"User pressed 's'. Setting minimum blue saturation to {value}."
+                            )
+
+                            sat_msg = Int32()
+                            sat_msg.data = value
+                            self.set_min_blue_sat_pub.publish(sat_msg)
+                        except (ValueError, IndexError):
+                            self.get_logger().warn("Invalid command format for 's'. Use: s <value>")
+
                     elif user_input == "q":
                         self.get_logger().info("User pressed 'q'. Shutting down.")
 
