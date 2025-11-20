@@ -1,0 +1,13 @@
+# Goal
+geometry_msgs/Pose2D[] cell_poses
+string constraints_identifier
+
+---
+# Result
+bool success
+string message
+
+---
+# Feedback
+string status
+float64 progress

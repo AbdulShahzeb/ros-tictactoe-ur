@@ -15,7 +15,7 @@ from rclpy.action import ActionClient
 from std_msgs.msg import String, Int32MultiArray, Int32, Bool
 from geometry_msgs.msg import Pose2D
 from helper.msg import GridPose
-from helper.action import DrawShape
+from helper.action import DrawShape, EraseGrid
 from ament_index_python.packages import get_package_share_directory
 
 
@@ -360,6 +360,9 @@ class TicTacToeNode(Node):
         self.draw_action_client = ActionClient(
             self, DrawShape, "manipulation/draw_shape"
         )
+        self.erase_action_client = ActionClient(
+            self, EraseGrid, "manipulation/erase_grid"
+        )
         self.waiting_for_robot = False
         self._pending_move = None
         self._constraint = (
@@ -436,10 +439,10 @@ class TicTacToeNode(Node):
             self.get_logger().info(f"Sending goal: Draw {shape} at cell {cell_number}")
 
         # Send goal with callbacks
-        self._send_goal_future = self.draw_action_client.send_goal_async(
+        self._send_draw_goal_future = self.draw_action_client.send_goal_async(
             goal_msg, feedback_callback=self.draw_feedback_callback
         )
-        self._send_goal_future.add_done_callback(self.draw_goal_response_callback)
+        self._send_draw_goal_future.add_done_callback(self.draw_goal_response_callback)
 
     def draw_goal_response_callback(self, future):
         """Handle goal acceptance/rejection."""
@@ -451,8 +454,8 @@ class TicTacToeNode(Node):
 
         if self.toggle_log:
             self.get_logger().info("Goal accepted, waiting for result...")
-        self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.draw_result_callback)
+        self._get_draw_result_future = goal_handle.get_result_async()
+        self._get_draw_result_future.add_done_callback(self.draw_result_callback)
 
     def draw_feedback_callback(self, feedback_msg):
         """Handle feedback from action server."""
@@ -486,6 +489,74 @@ class TicTacToeNode(Node):
             # Retry the move
             row, col = self._pending_move
             self.send_draw_shape_goal(row, col, self.ai_symbol)
+
+    def send_erase_grid_goal(self):
+        """Send action goal to manipulation node to erase the grid."""
+        if self.grid_poses is None or len(self.grid_poses) < 9:
+            self.get_logger().error("Grid poses not available!")
+            return
+
+        # Block game interactions
+        self.waiting_for_robot = True
+
+        # Wait for action server
+        if not self.erase_action_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error("Erase grid action server not available!")
+            self.waiting_for_robot = False
+            return
+
+        # Create goal with 6 poses: TL, TR, MR, ML, BL, BR
+        goal_msg = EraseGrid.Goal()
+        goal_msg.poses = [
+            self.grid_poses[0],  # TL
+            self.grid_poses[2],  # TR
+            self.grid_poses[5],  # MR
+            self.grid_poses[3],  # ML
+            self.grid_poses[6],  # BL
+            self.grid_poses[8],  # BR
+        ]
+        goal_msg.constraints_identifier = self._constraint
+
+        if self.toggle_log:
+            self.get_logger().info("Sending goal: Erase grid")
+
+        # Send goal with callbacks
+        self._send_erase_goal_future = self.erase_action_client.send_goal_async(
+            goal_msg, feedback_callback=self.erase_feedback_callback
+        )
+        self._send_erase_goal_future.add_done_callback(
+            self.erase_goal_response_callback
+        )
+
+    def erase_goal_response_callback(self, future):
+        """Handle erase goal acceptance/rejection."""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().error("Erase goal rejected by action server!")
+            self.waiting_for_robot = False
+            return
+
+        if self.toggle_log:
+            self.get_logger().info("Erase goal accepted, waiting for result...")
+        self._get_erase_result_future = goal_handle.get_result_async()
+        self._get_erase_result_future.add_done_callback(self.erase_result_callback)
+
+    def erase_feedback_callback(self, feedback_msg):
+        """Handle feedback from erase action server."""
+        feedback = feedback_msg.feedback
+        if self.toggle_log:
+            self.get_logger().info(
+                f"Erasing progress: {feedback.status} - {feedback.progress:.1%}"
+            )
+
+    def erase_result_callback(self, future):
+        """Handle erase action completion."""
+        result = future.result().result
+        self.waiting_for_robot = False
+
+        if result.success:
+            if self.toggle_log:
+                self.get_logger().info(f"Erasing completed: {result.message}")
 
     def check_game_end(self):
         """Check if game ended and update statistics."""
@@ -617,6 +688,11 @@ class TicTacToeNode(Node):
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
+                    if self.waiting_for_robot:
+                        self.get_logger().info("Robot is busy. Please wait...")
+                        continue
+                    self.get_logger().info("Reset requested, resetting game")
+                    self.send_erase_grid_goal()
                     self.reset_game()
                 elif event.key == pygame.K_q:
                     self.get_logger().info("Quit requested, shutting down node")

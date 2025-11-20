@@ -91,8 +91,22 @@ def generate_launch_description():
 
     # Delay MoveIt
     delay_moveit = TimerAction(
-        period=3.0,
+        period=4.0,
         actions=[moveit_launch]
+    )
+
+    # MoveIt Server Node
+    moveit_server_node = Node(
+        package='manipulation',
+        executable='moveit_server',
+        name='moveit_server_node',
+        output='screen',
+    )
+
+    # Delay for MoveIt Server
+    delay_moveit_server = TimerAction(
+        period=6.0,
+        actions=[moveit_server_node]
     )
 
 
@@ -129,12 +143,12 @@ def generate_launch_description():
     )
 
     # Static Transform
-    static_transform_node = Node(
+    '''static_transform_node = Node(
         package='manipulation',
         executable='static_transform',
         name='static_transform_node',
         output='screen',
-    )
+    )'''
 
     # Keyboard Node
     keyboard_node = Node(
@@ -162,5 +176,5 @@ def generate_launch_description():
         keyboard_node,
         aruco_vision_node,
         cell_vision_node,
-        static_transform_node,
+        delay_moveit_server,
     ])
