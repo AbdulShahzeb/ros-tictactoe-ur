@@ -25,11 +25,11 @@ class ArucoVisionNode(Node):
 
         # --- CV2 Setup ---
         self.bridge = CvBridge()
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.detector_params = cv2.aruco.DetectorParameters()
 
         # --- Declare and get ROS parameters ---
-        self.declare_parameter("exposure", 120)
+        self.declare_parameter("exposure", 180)
         self.exposure = (
             self.get_parameter("exposure").get_parameter_value().integer_value
         )
@@ -53,7 +53,7 @@ class ArucoVisionNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
-        self.broadcast_camera_transform()
+        self.camera_broadcaster = self.create_timer(3.0, self.broadcast_camera_transform)
 
         # --- Publishers and Subscribers ---
         self.camera_sub = self.create_subscription(

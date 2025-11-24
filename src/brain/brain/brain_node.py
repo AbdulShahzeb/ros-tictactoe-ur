@@ -329,7 +329,6 @@ class TicTacToeNode(Node):
 
         # Publishers
         self.game_state_pub = self.create_publisher(Int32MultiArray, "game_state", 10)
-        self.move_request_pub = self.create_publisher(Int32, "robot_move_request", 10)
         self.game_status_pub = self.create_publisher(String, "game_status", 10)
         self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
         if self.enable_serial:
@@ -493,6 +492,7 @@ class TicTacToeNode(Node):
                 self.get_logger().info(f"Drawing completed: {result.message}")
             row, col = self._pending_move
             self.game.make_move(row, col)
+            self._pending_move = None
             self.publish_game_state()
             self.check_game_end()
 

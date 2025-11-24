@@ -39,7 +39,7 @@ def generate_launch_description():
         description='Path to O agent model file'
     )
 
-    use_fake = True
+    use_fake = False
     ip_address = "192.168.56.101"
     if not use_fake:
         ip_address = "192.168.0.100"
@@ -134,7 +134,7 @@ def generate_launch_description():
         name='aruco_vision_node',
         output='screen',
         parameters=[{
-            'exposure': 120
+            'exposure': 180
         }]
     )
 
