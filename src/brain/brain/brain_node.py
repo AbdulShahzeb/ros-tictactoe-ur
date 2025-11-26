@@ -290,6 +290,7 @@ class TicTacToeNode(Node):
         self.declare_parameter(
             "agent_o_file", os.path.join(package_dir, "models", "menace_agent_o.npy")
         )
+        self.declare_parameter("fps", 15)
         self.declare_parameter("enable_serial", False)
 
         # Get parameters
@@ -368,7 +369,7 @@ class TicTacToeNode(Node):
         ]
 
         # Vision-based move detection
-        self.UPDATE_FREQUENCY = 6.0  # Hz
+        self.UPDATE_FREQUENCY = self.get_parameter("fps").value  # Hz
         self.CONFIRMATION_TIME = 3.0  # seconds
         self.WINDOW_SIZE = int(self.UPDATE_FREQUENCY * self.CONFIRMATION_TIME)
         self.CONFIRMATION_THRESHOLD = 0.8

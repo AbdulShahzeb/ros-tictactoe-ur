@@ -39,6 +39,12 @@ def generate_launch_description():
         description='Path to O agent model file'
     )
 
+    fps_arg = DeclareLaunchArgument(
+        'fps',
+        default_value='15',
+        description='Fps for realsense RGB camera'
+    )
+
     use_fake = False
     ip_address = "192.168.56.101"
     if not use_fake:
@@ -98,6 +104,23 @@ def generate_launch_description():
         actions=[moveit_launch]
     )
 
+    # Realsense Launch
+    realsense_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('realsense2_camera'),
+                'launch',
+                'rs_launch.py'
+            ])
+        ]),
+        launch_arguments={
+            'enable_color': 'true',
+            'enable_depth': 'false',
+            'rgb_camera.color_profile': f'1920x1080x{LaunchConfiguration("fps")}',
+            'pointcloud.enable': 'false'
+        }.items()
+    )
+
     # MoveIt Server Node
     moveit_server_node = Node(
         package='manipulation',
@@ -123,6 +146,7 @@ def generate_launch_description():
             'player': LaunchConfiguration('player'),
             'agent_x_file': LaunchConfiguration('agent_x_file'),
             'agent_o_file': LaunchConfiguration('agent_o_file'),
+            'fps': LaunchConfiguration('fps'),
             'enable_serial': False,
         }]
     )
@@ -146,14 +170,6 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Static Transform
-    '''static_transform_node = Node(
-        package='manipulation',
-        executable='static_transform',
-        name='static_transform_node',
-        output='screen',
-    )'''
-
     # Keyboard Node
     keyboard_node = Node(
         package='brain',
@@ -174,6 +190,8 @@ def generate_launch_description():
         player_arg,
         agent_x_file_arg,
         agent_o_file_arg,
+        fps_arg,
+        realsense_launch,
         ur_control_launch,
         delay_moveit,
         delay_brain,

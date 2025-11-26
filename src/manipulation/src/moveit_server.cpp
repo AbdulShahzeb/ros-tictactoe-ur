@@ -46,6 +46,7 @@ class MoveitServer {
         // Drawing parameters
         node_->declare_parameter("cell_size", 0.05);
         node_->declare_parameter("drawing_height", 0.17);
+        node_->declare_parameter("erase_height", 0.17);
         node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
         node_->declare_parameter("x_offset", -0.065);
         node_->declare_parameter("y_offset", -0.017);
@@ -509,8 +510,8 @@ class MoveitServer {
         RCLCPP_INFO(node_->get_logger(), "Erasing grid with serpentine pattern");
 
         // Get parameters
-        double drawing_height = node_->get_parameter("drawing_height").as_double();
-        double lift_height = node_->get_parameter("lift_height").as_double();
+        double erase_height = node_->get_parameter("erase_height").as_double();
+        double lift_height = erase_height + 0.05;
         double x_offset = node_->get_parameter("x_offset").as_double() * -1;  // Invert for erasing
         double y_offset = node_->get_parameter("y_offset").as_double();
         double erase_offset = node_->get_parameter("erase_offset").as_double();
@@ -543,7 +544,7 @@ class MoveitServer {
         feedback->progress = 0.1;
         goal_handle->publish_feedback(feedback);
 
-        waypoints.push_back(create_pose(start_x, start_y, drawing_height));
+        waypoints.push_back(create_pose(start_x, start_y, erase_height));
         if (!execute_cartesian_path(waypoints)) return false;
         waypoints.clear();
 
@@ -553,7 +554,7 @@ class MoveitServer {
         goal_handle->publish_feedback(feedback);
 
         auto [tr_x, tr_y] = apply_grid_offset(cell_poses[1].x, cell_poses[1].y, erase_offset, 0);
-        waypoints.push_back(create_pose(tr_x, tr_y, drawing_height));
+        waypoints.push_back(create_pose(tr_x, tr_y, erase_height));
         if (!execute_cartesian_path(waypoints)) return false;
         waypoints.clear();
 
@@ -563,7 +564,7 @@ class MoveitServer {
         goal_handle->publish_feedback(feedback);
 
         auto [mr_x, mr_y] = apply_grid_offset(cell_poses[2].x, cell_poses[2].y, erase_offset, 0);
-        waypoints.push_back(create_pose(mr_x, mr_y, drawing_height));
+        waypoints.push_back(create_pose(mr_x, mr_y, erase_height));
         if (!execute_cartesian_path(waypoints)) return false;
         waypoints.clear();
 
@@ -573,7 +574,7 @@ class MoveitServer {
         goal_handle->publish_feedback(feedback);
 
         auto [ml_x, ml_y] = apply_grid_offset(cell_poses[3].x, cell_poses[3].y, -erase_offset, 0);
-        waypoints.push_back(create_pose(ml_x, ml_y, drawing_height));
+        waypoints.push_back(create_pose(ml_x, ml_y, erase_height));
         if (!execute_cartesian_path(waypoints)) return false;
         waypoints.clear();
 
@@ -583,7 +584,7 @@ class MoveitServer {
         goal_handle->publish_feedback(feedback);
 
         auto [bl_x, bl_y] = apply_grid_offset(cell_poses[4].x, cell_poses[4].y, -erase_offset, 0);
-        waypoints.push_back(create_pose(bl_x, bl_y, drawing_height));
+        waypoints.push_back(create_pose(bl_x, bl_y, erase_height));
         if (!execute_cartesian_path(waypoints)) return false;
         waypoints.clear();
 
@@ -593,7 +594,7 @@ class MoveitServer {
         goal_handle->publish_feedback(feedback);
 
         auto [br_x, br_y] = apply_grid_offset(cell_poses[5].x, cell_poses[5].y, erase_offset, 0);
-        waypoints.push_back(create_pose(br_x, br_y, drawing_height));
+        waypoints.push_back(create_pose(br_x, br_y, erase_height));
         if (!execute_cartesian_path(waypoints)) return false;
         waypoints.clear();
 

@@ -100,7 +100,7 @@ class ArucoVisionNode(Node):
         t = TransformStamped()
         t.header.stamp = rclpy.time.Time(seconds=0).to_msg()
         t.header.frame_id = "world"
-        t.child_frame_id = "camera_depth_optical_frame"
+        t.child_frame_id = "camera_rgb_optical_frame"
 
         t.transform.translation.x = self.cam_to_base_translation[0]
         t.transform.translation.y = self.cam_to_base_translation[1]
@@ -276,7 +276,7 @@ class ArucoVisionNode(Node):
         t = TransformStamped()
         # Use latest time for transform
         t.header.stamp = time
-        t.header.frame_id = "camera_depth_optical_frame"
+        t.header.frame_id = "camera_rgb_optical_frame"
         t.child_frame_id = "grid_frame"
         t.transform.translation.x = float(x_m)
         t.transform.translation.y = float(y_m)
