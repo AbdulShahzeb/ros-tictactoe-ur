@@ -716,7 +716,7 @@ class TicTacToeNode(Node):
                     if self.enable_serial:
                         self.end_effector_state = EndEffectorState.ERASER
                         self.ser.write(f"{self.end_effector_state.value}\n".encode())
-                    self.send_erase_grid_goal()
+                        self.send_erase_grid_goal()
                     self.reset_game()
                 elif event.key == pygame.K_q:
                     self.get_logger().info("Quit requested, shutting down node")
