@@ -15,8 +15,10 @@ colcon build --symlink-install
 source install/setup.bash
 
 # Running
-ros2 launch brain tictactoe.launch.py              # Default: Play as X
-ros2 launch brain tictactoe.launch.py player:=o    # Play as O
+ros2 launch brain tictactoe.launch.py                               # Default: Play human vs. robot as X
+ros2 launch brain tictactoe.launch.py player:=o                     # Play human vs. robot as O
+ros2 launch brain tictactoe.launch.py player:=x gamemode:=robot     # Play robot vs. robot as X
+ros2 launch brain tictactoe.launch.py player:=x gamemode:=human     # Play human vs. robot as X (same as default)
 ```
 
 ## Requirements

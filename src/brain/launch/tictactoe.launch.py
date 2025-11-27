@@ -53,8 +53,8 @@ def generate_launch_description():
 
     gamemode_selection_arg = DeclareLaunchArgument(
         'gamemode',
-        default_value=1,
-        description='Game mode selection: 0 (robot vs robot), 1 (human vs robot)'
+        default_value='human',
+        description='Game mode selection: human (human vs robot), robot (robot vs robot)'
     )
 
     use_fake = False
@@ -166,7 +166,7 @@ def generate_launch_description():
 
 
     # Brain node
-    if gamemode_selection_arg == '0':
+    if LaunchConfiguration('gamemode') == 'robot':
         brain_executable = 'robot_vs_robot'
     else:
         brain_executable = 'human_vs_robot'
