@@ -58,7 +58,7 @@ def generate_launch_description():
     description_file = os.path.join(
         get_package_share_directory('end_effector'),
         'urdf',
-        'ur_with_pen_holder.xacro'
+        'ur_with_end_effector.xacro'
     )
     kinematics_params_file = os.path.join(
         get_package_share_directory('brain'),

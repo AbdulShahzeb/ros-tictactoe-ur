@@ -1,10 +1,10 @@
 #!/bin/bash
 
-UR_TYPE="ur10e"
+UR_TYPE="ur5e"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -5|--ur5e) UR_TYPE="ur5e" ;;
+        -10|--ur10e) UR_TYPE="ur10e" ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
     shift
