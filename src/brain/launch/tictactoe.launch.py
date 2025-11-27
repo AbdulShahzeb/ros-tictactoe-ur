@@ -51,6 +51,12 @@ def generate_launch_description():
         description='Enable serial communication with robot'
     )
 
+    gamemode_selection_arg = DeclareLaunchArgument(
+        'gamemode',
+        default_value=1,
+        description='Game mode selection: 0 (robot vs robot), 1 (human vs robot)'
+    )
+
     use_fake = False
     ip_address = "192.168.56.101"
     if not use_fake:
@@ -160,9 +166,13 @@ def generate_launch_description():
 
 
     # Brain node
+    if gamemode_selection_arg == '0':
+        brain_executable = 'robot_vs_robot'
+    else:
+        brain_executable = 'human_vs_robot'
     brain_node = Node(
         package='brain',
-        executable='brain_node',
+        executable=brain_executable,
         name='brain_node',
         output='screen',
         parameters=[{
