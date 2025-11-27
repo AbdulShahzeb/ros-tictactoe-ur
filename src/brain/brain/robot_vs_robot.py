@@ -25,6 +25,7 @@ class EndEffectorState:
     MIDDLE = 90
     BLUE = 45
 
+
 def encode_board_base3(board_array: np.ndarray) -> int:
     """
     Converts a 3x3 board array (with values -1, 0, 1) to a base-3 integer.
@@ -312,7 +313,9 @@ class TicTacToeNode(Node):
         # Game setup
         self.human_player = 1 if player_str.lower() == "x" else -1
         self.ai_player = -self.human_player
-        self.end_effector_state = EndEffectorState.BLUE if self.human_player == 1 else EndEffectorState.RED
+        self.end_effector_state = (
+            EndEffectorState.BLUE if self.human_player == 1 else EndEffectorState.RED
+        )
 
         # Load AI agent
         if self.ai_player == 1:
@@ -509,7 +512,11 @@ class TicTacToeNode(Node):
 
             if not self.game.game_over and self.game.current_player == self.ai_player:
                 if self.enable_serial:
-                    self.end_effector_state = EndEffectorState.RED if self.ai_symbol == "O" else EndEffectorState.BLUE
+                    self.end_effector_state = (
+                        EndEffectorState.RED
+                        if self.ai_symbol == "O"
+                        else EndEffectorState.BLUE
+                    )
                     self.ser.write(f"{self.end_effector_state}\n".encode())
                 self.make_ai_move()
 
@@ -621,7 +628,11 @@ class TicTacToeNode(Node):
                     if cell:
                         row, col = cell
                         if self.enable_serial:
-                            self.end_effector_state = EndEffectorState.RED if self.human_symbol == "O" else EndEffectorState.BLUE
+                            self.end_effector_state = (
+                                EndEffectorState.RED
+                                if self.human_symbol == "O"
+                                else EndEffectorState.BLUE
+                            )
                             self.ser.write(f"{self.end_effector_state}\n".encode())
                         self.make_human_move(row, col)
 

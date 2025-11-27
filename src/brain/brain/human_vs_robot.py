@@ -26,6 +26,7 @@ class EndEffectorState(Enum):
     MARKER = 110
     MIDDLE = 90
 
+
 def encode_board_base3(board_array: np.ndarray) -> int:
     """
     Converts a 3x3 board array (with values -1, 0, 1) to a base-3 integer.
