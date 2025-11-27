@@ -97,10 +97,10 @@ class ArucoVisionNode(Node):
     # ===============================================================
     def broadcast_camera_transform(self):
         """Broadcast static transform from camera to world frame"""
+        child_frame_ids = ["camera_rgb_optical_frame", "camera_color_optical_frame", "camera_color_frame", "camera_link"]
         t = TransformStamped()
         t.header.stamp = rclpy.time.Time(seconds=0).to_msg()
         t.header.frame_id = "world"
-        t.child_frame_id = "camera_rgb_optical_frame"
 
         t.transform.translation.x = self.cam_to_base_translation[0]
         t.transform.translation.y = self.cam_to_base_translation[1]
@@ -112,7 +112,9 @@ class ArucoVisionNode(Node):
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
 
-        self.static_tf_broadcaster.sendTransform(t)
+        for child_frame_id in child_frame_ids:
+            t.child_frame_id = child_frame_id
+            self.static_tf_broadcaster.sendTransform(t)
 
     def pixel_to_grid_coords(
         self, x_px: float, y_px: float, img_w: int, img_h: int

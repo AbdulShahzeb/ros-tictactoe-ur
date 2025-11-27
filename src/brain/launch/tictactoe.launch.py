@@ -45,6 +45,12 @@ def generate_launch_description():
         description='Fps for realsense RGB camera'
     )
 
+    enable_serial_arg = DeclareLaunchArgument(
+        'enable_serial',
+        default_value='true',
+        description='Enable serial communication with robot'
+    )
+
     use_fake = False
     ip_address = "192.168.56.101"
     if not use_fake:
@@ -94,14 +100,28 @@ def generate_launch_description():
         launch_arguments={
             'ur_type': 'ur5e',
             'robot_ip': ip_address,
-            'launch_rviz': 'true',
+            'launch_rviz': 'false',
         }.items()
     )
 
-    # Delay MoveIt
+    # Run RViz
+    rviz_config_file = os.path.join(
+        get_package_share_directory('brain'),
+        'rviz',
+        'tictactoe.rviz'
+    )
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_file],
+        output='screen'
+    )
+
+    # Delay MoveIt and RViz
     delay_moveit = TimerAction(
         period=4.0,
-        actions=[moveit_launch]
+        actions=[moveit_launch, rviz_node]
     )
 
     # Realsense Launch
@@ -116,7 +136,7 @@ def generate_launch_description():
         launch_arguments={
             'enable_color': 'true',
             'enable_depth': 'false',
-            'rgb_camera.color_profile': f'1920x1080x{LaunchConfiguration("fps")}',
+            'rgb_camera.color_profile': '1920x1080x15',
             'pointcloud.enable': 'false'
         }.items()
     )
@@ -127,6 +147,9 @@ def generate_launch_description():
         executable='moveit_server',
         name='moveit_server_node',
         output='screen',
+        parameters=[{
+            'enable_serial': LaunchConfiguration('enable_serial'),
+        }]
     )
 
     # Delay for MoveIt Server
@@ -147,7 +170,7 @@ def generate_launch_description():
             'agent_x_file': LaunchConfiguration('agent_x_file'),
             'agent_o_file': LaunchConfiguration('agent_o_file'),
             'fps': LaunchConfiguration('fps'),
-            'enable_serial': False,
+            'enable_serial': LaunchConfiguration('enable_serial'),
         }]
     )
 
@@ -191,6 +214,7 @@ def generate_launch_description():
         agent_x_file_arg,
         agent_o_file_arg,
         fps_arg,
+        enable_serial_arg,
         realsense_launch,
         ur_control_launch,
         delay_moveit,

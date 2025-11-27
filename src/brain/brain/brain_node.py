@@ -19,12 +19,13 @@ from helper.action import DrawShape, EraseGrid
 from ament_index_python.packages import get_package_share_directory
 import serial
 from enum import Enum, auto
+from time import sleep
 
 
 class EndEffectorState(Enum):
-    MARKER = 45
+    MARKER = 110
     MIDDLE = 90
-    ERASER = 135
+    ERASER = 5
 
 
 def encode_board_base3(board_array: np.ndarray) -> int:
@@ -522,6 +523,7 @@ class TicTacToeNode(Node):
         if not self.erase_action_client.wait_for_server(timeout_sec=5.0):
             self.get_logger().error("Erase grid action server not available!")
             self.waiting_for_robot = False
+            self.reset_game()
             return
 
         # Create goal with 6 poses: TL, TR, MR, ML, BL, BR
@@ -553,6 +555,7 @@ class TicTacToeNode(Node):
         if not goal_handle.accepted:
             self.get_logger().error("Erase goal rejected by action server!")
             self.waiting_for_robot = False
+            self.reset_game()
             return
 
         if self.toggle_log:
@@ -572,6 +575,7 @@ class TicTacToeNode(Node):
         """Handle erase action completion."""
         result = future.result().result
         self.waiting_for_robot = False
+        self.reset_game()
 
         if result.success:
             if self.toggle_log:
@@ -717,8 +721,10 @@ class TicTacToeNode(Node):
                     if self.enable_serial:
                         self.end_effector_state = EndEffectorState.ERASER
                         self.ser.write(f"{self.end_effector_state.value}\n".encode())
+                        sleep(1)
                         self.send_erase_grid_goal()
-                    self.reset_game()
+                    else:
+                        self.reset_game()
                 elif event.key == pygame.K_q:
                     self.get_logger().info("Quit requested, shutting down node")
                     pygame.quit()

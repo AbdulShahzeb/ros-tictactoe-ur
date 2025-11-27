@@ -43,14 +43,26 @@ class MoveitServer {
         node_->declare_parameter("goal_position_tolerance", 0.001);
         node_->declare_parameter("goal_orientation_tolerance", 0.001);
 
+        // Get enable_serial from launch parameter
+        bool enable_serial = node_->declare_parameter("enable_serial", true);
+
         // Drawing parameters
+        if (enable_serial) {
+            // Using custom end-effector
+            node_->declare_parameter("x_offset", -0.041);
+            node_->declare_parameter("y_offset", -0.106);
+            node_->declare_parameter("drawing_height", 0.188);
+            node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
+        } else {
+            node_->declare_parameter("x_offset", -0.065);
+            node_->declare_parameter("y_offset", -0.017);
+            node_->declare_parameter("drawing_height", 0.170);
+            node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
+        }
         node_->declare_parameter("cell_size", 0.05);
-        node_->declare_parameter("drawing_height", 0.17);
-        node_->declare_parameter("erase_height", 0.17);
-        node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
-        node_->declare_parameter("x_offset", -0.065);
-        node_->declare_parameter("y_offset", -0.017);
-        node_->declare_parameter("erase_offset", 0.010);
+        node_->declare_parameter("erase_height", 0.180);
+        
+        node_->declare_parameter("erase_offset", -0.010);
         node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -103.5, 106.1, -92.6, -90.0, 0.0});
 
         setupCollisionObjects();
@@ -506,18 +518,24 @@ class MoveitServer {
     }
 
     bool erase_grid_pattern(const std::vector<geometry_msgs::msg::Pose2D>& cell_poses,
-                            const std::shared_ptr<GoalHandleEraseGrid>& goal_handle, std::shared_ptr<EraseGrid::Feedback>& feedback) {
+                        const std::shared_ptr<GoalHandleEraseGrid>& goal_handle, std::shared_ptr<EraseGrid::Feedback>& feedback) {
         RCLCPP_INFO(node_->get_logger(), "Erasing grid with serpentine pattern");
 
         // Get parameters
         double erase_height = node_->get_parameter("erase_height").as_double();
         double lift_height = erase_height + 0.05;
-        double x_offset = node_->get_parameter("x_offset").as_double() * -1;  // Invert for erasing
+        double x_offset = node_->get_parameter("x_offset").as_double();
+        x_offset *= -1;  // Invert for eraser
         double y_offset = node_->get_parameter("y_offset").as_double();
         double erase_offset = node_->get_parameter("erase_offset").as_double();
         double grid_theta = cell_poses[0].theta;
         double cos_t = std::cos(grid_theta);
         double sin_t = std::sin(grid_theta);
+        double fraction_thresh = 0.3;
+        int num_segments = 5;
+
+        // Debug: Print x offset
+        RCLCPP_INFO(node_->get_logger(), "Eraser x_offset: %.3f, y_offset: %.3f", x_offset, y_offset); 
 
         // Pattern: TL->TR, TR->MR, MR->ML, ML->BL, BL->BR
         std::vector<geometry_msgs::msg::Pose> waypoints;
@@ -529,6 +547,16 @@ class MoveitServer {
             return {world_x, world_y};
         };
 
+        // Helper lambda to add intermediate waypoints between two points
+        auto add_intermediate_waypoints = [&](double x1, double y1, double x2, double y2, double z) {
+            for (int i = 1; i <= num_segments; i++) {
+                double t = static_cast<double>(i) / num_segments;
+                double interp_x = x1 + t * (x2 - x1);
+                double interp_y = y1 + t * (y2 - y1);
+                waypoints.push_back(create_pose(interp_x, interp_y, z));
+            }
+        };
+
         // 1. Move to start position (slightly left of top_left center)
         feedback->status = "moving_to_start";
         feedback->progress = 0.05;
@@ -536,75 +564,84 @@ class MoveitServer {
 
         auto [start_x, start_y] = apply_grid_offset(cell_poses[0].x, cell_poses[0].y, -erase_offset, 0);
         waypoints.push_back(create_pose(start_x, start_y, lift_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 2. Descend to drawing height
+        // 2. Descend to erase height with intermediate waypoints
         feedback->status = "descending";
         feedback->progress = 0.1;
         goal_handle->publish_feedback(feedback);
 
+        add_intermediate_waypoints(start_x, start_y, start_x, start_y, lift_height);
         waypoints.push_back(create_pose(start_x, start_y, erase_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 3. TL to TR (slightly right of TR)
+        // 3. TL to TR (slightly right of TR) with intermediate waypoints
         feedback->status = "erasing_row_1";
         feedback->progress = 0.2;
         goal_handle->publish_feedback(feedback);
 
         auto [tr_x, tr_y] = apply_grid_offset(cell_poses[1].x, cell_poses[1].y, erase_offset, 0);
-        waypoints.push_back(create_pose(tr_x, tr_y, erase_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        add_intermediate_waypoints(start_x, start_y, tr_x, tr_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 4. TR to MR (at MR center with offset)
+        // 4. TR to MR with intermediate waypoints
         feedback->status = "erasing_row_2_part_1";
         feedback->progress = 0.35;
         goal_handle->publish_feedback(feedback);
 
         auto [mr_x, mr_y] = apply_grid_offset(cell_poses[2].x, cell_poses[2].y, erase_offset, 0);
-        waypoints.push_back(create_pose(mr_x, mr_y, erase_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        add_intermediate_waypoints(tr_x, tr_y, mr_x, mr_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 5. MR to ML
+        // 5. MR to ML with intermediate waypoints
         feedback->status = "erasing_row_2_part_2";
         feedback->progress = 0.5;
         goal_handle->publish_feedback(feedback);
 
         auto [ml_x, ml_y] = apply_grid_offset(cell_poses[3].x, cell_poses[3].y, -erase_offset, 0);
-        waypoints.push_back(create_pose(ml_x, ml_y, erase_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        add_intermediate_waypoints(mr_x, mr_y, ml_x, ml_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 6. ML to BL
+        // 6. ML to BL with intermediate waypoints
         feedback->status = "erasing_row_3_part_1";
         feedback->progress = 0.65;
         goal_handle->publish_feedback(feedback);
 
         auto [bl_x, bl_y] = apply_grid_offset(cell_poses[4].x, cell_poses[4].y, -erase_offset, 0);
-        waypoints.push_back(create_pose(bl_x, bl_y, erase_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        add_intermediate_waypoints(ml_x, ml_y, bl_x, bl_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 7. BL to BR (end slightly right of BR)
+        // 7. BL to BR with intermediate waypoints
         feedback->status = "erasing_row_3_part_2";
         feedback->progress = 0.8;
         goal_handle->publish_feedback(feedback);
 
         auto [br_x, br_y] = apply_grid_offset(cell_poses[5].x, cell_poses[5].y, erase_offset, 0);
-        waypoints.push_back(create_pose(br_x, br_y, erase_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        add_intermediate_waypoints(bl_x, bl_y, br_x, br_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
         waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // 8. Lift up
+        // 8. Lift up with intermediate waypoints
         feedback->status = "lifting";
         feedback->progress = 0.9;
         goal_handle->publish_feedback(feedback);
 
+        add_intermediate_waypoints(br_x, br_y, br_x, br_y, erase_height);
         waypoints.push_back(create_pose(br_x, br_y, lift_height));
-        if (!execute_cartesian_path(waypoints)) return false;
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
 
         RCLCPP_INFO(node_->get_logger(), "Grid erased successfully");
         return true;
@@ -628,13 +665,13 @@ class MoveitServer {
         return pose;
     }
 
-    bool execute_cartesian_path(const std::vector<geometry_msgs::msg::Pose>& waypoints) {
+    bool execute_cartesian_path(const std::vector<geometry_msgs::msg::Pose>& waypoints, double fraction_thresh = 0.90) {
         moveit_msgs::msg::RobotTrajectory trajectory;
         const double eef_step = 0.005;
         const double jump_threshold = 0.0;
         double fraction = move_group_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
 
-        if (fraction < 0.90) {
+        if (fraction < fraction_thresh) {
             RCLCPP_ERROR(node_->get_logger(), "Cartesian path planning failed (%.2f%% achieved)", fraction * 100.0);
             return false;
         }
