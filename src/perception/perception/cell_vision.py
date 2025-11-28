@@ -44,7 +44,6 @@ class CellVision(Node):
         # Meshes
         self.x_mesh_path = "package://perception/meshes/x.STL"
         self.o_mesh_path = "package://perception/meshes/o.STL"
-        self.mesh_scale = 0.001
 
     # ===============================================================
     #   Helper Functions
@@ -250,9 +249,6 @@ class CellVision(Node):
                 marker.pose.position.y = y
                 marker.pose.position.z = 0.0
                 marker.pose.orientation.w = 1.0
-                marker.scale.x = self.mesh_scale
-                marker.scale.y = self.mesh_scale
-                marker.scale.z = 0.001
                 marker.mesh_resource = self.x_mesh_path if color_codes[i] == 1 else self.o_mesh_path
                 marker.mesh_use_embedded_materials = False
 
