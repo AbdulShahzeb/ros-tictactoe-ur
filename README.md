@@ -16,6 +16,11 @@
   - [Hardware Setup](#hardware-setup)
 - [Running the System](#running-the-system)
   - [Expected Behaviour](#expected-behaviour)
+  - [Keyboard Commands](#keyboard-commands)
+  - [Gameplay Instructions](#gameplay-instructions)
+    - [Human vs. Robot Mode:](#human-vs-robot-mode)
+    - [Robot vs. Robot Mode:](#robot-vs-robot-mode)
+  - [Troubleshooting](#troubleshooting)
 - [Results and Demo](#results-and-demo)
 - [Discussion and Future Work](#discussion-and-future-work)
 - [Contributors and Roles](#contributors-and-roles)
@@ -160,8 +165,8 @@ The system implements closed-loop control through continuous vision-based state 
 
 ```bash
 # Git
-git clone git@github.com:AbdulShahzeb/mtrn4231-project.git
-cd mtrn4231-project
+git clone git@github.com:AbdulShahzeb/ros-tictactoe-ur.git
+cd ros-tictactoe-ur
 pip3 install -r requirements.txt
 
 # (Optional) Training Tic-Tac-Toe agents
@@ -177,37 +182,131 @@ source install/setup.bash
 
 
 ## Running the System
+**Quick Start**
+Launch the complete system with a single command:
 ```bash
-# Default: Play human vs. robot as X
+# Default: Human (X) vs. Robot (O)
 ros2 launch brain tictactoe.launch.py
-
-# Play human vs. robot as O
-ros2 launch brain tictactoe.launch.py player:=o
-
-# Play robot vs. robot as X
-ros2 launch brain tictactoe.launch.py player:=x gamemode:=robot
-
-# Play human vs. robot as X (same as default)
-ros2 launch brain tictactoe.launch.py player:=x gamemode:=human
 ```
+
+**Launch Options**
+The system supports multiple game modes and player configurations:
+```bash
+# Human vs. Robot modes
+ros2 launch brain tictactoe.launch.py player:=x    # Play as X (default)
+ros2 launch brain tictactoe.launch.py player:=o    # Play as O
+
+# Robot vs. Robot mode (human selects moves via mouse for one player)
+ros2 launch brain tictactoe.launch.py player:=x gamemode:=robot
+ros2 launch brain tictactoe.launch.py player:=o gamemode:=robot
+
+# Disable serial communication (if end-effector servo not connected)
+ros2 launch brain tictactoe.launch.py enable_serial:=false
+```
+
+**Launch Parameters**
+
+- `player`: Symbol for human player (x or o, default: x)
+- `gamemode`: Game mode selection (human or robot, default: human)
+- `enable_serial`: Enable servo control for end-effector (true or false, default: true)
+- `fps`: Camera frame rate in Hz (default: 15)
 
 ### Expected Behaviour
 
-The launch command should launch:
-- UR ROS2 Driver
-- MoveIt
-- RealSense node
-- MoveIt server (manipulation node)
-- CV nodes for ArUco and X/O detection
-- XTerm window for keyboard commands
-- Pygame UI showing empty grid
-- RViz, pre-configured to include the following:
-  - UR5e model
-  - Collision boxes (walls and table)
-  - End-effector
-  - ArUco markers, if in camera frame
-  - Cell states (X or O)
-  - TF coordinate frames
+Upon launching, the system will sequentially start the following components:
+
+1. **Hardware Initialisation (0-3 seconds)**
+     - UR ROS2 Driver connects to the robot arm
+     - RealSense camera node activates and begins streaming
+     - Serial connection established with end-effector servo (if enabled)
+
+2. **Perception Pipeline (0-3 seconds)**
+
+   - ArUco vision node begins scanning for corner markers
+   - Once all 4 markers detected, grid frame is established
+   - Cell vision node starts publishing grid state at configured FPS
+
+3. **User Interfaces Launch (4-6 seconds)**
+
+   - **XTerm window**: Keyboard control interface with command menu
+   - **Pygame window**: Game visualisation showing empty 3×3 grid
+   - **RViz**: Full system visualisation including:
+     - UR5e robot model with dual-marker end-effector
+     - Collision geometry (table, walls, ceiling)
+     - ArUco marker positions (labeled TL, BL, TR, BR)
+     - Warped top-down grid view
+     - Detected cell states as 3D mesh overlays
+     - Complete TF tree visualisation
+
+
+4. **Motion Planning Setup (4-8 seconds)**
+
+     - MoveIt loads robot model and collision geometry
+     - Planning scene configured with table and wall constraints
+     - Robot moves to home position: `[0°, -103.5°, 106.1°, -92.6°, -90°, 0°]`
+
+5. **Game Ready State (8-10 seconds)**
+
+     - Pygame UI shows: `"Your turn (X) - Draw on the board"` (for human vs. robot)
+     - Or: `"Your turn (X) - Click to play"` (for robot vs. robot)
+
+### Keyboard Commands
+The XTerm window provides manual control during gameplay:
+| Key | Command | Description |
+|---|---|---|
+| `l` | Toggle logging | Enable/disable verbose logging in all nodes |
+| `i` | Toggle preliminary CV window | Show/hide ArUco detection preview window |
+| `s <value>` | Set blue saturation | Adjust blue marker detection threshold (e.g., `s 100`) |
+| `h` | Return home | Send robot to home position |
+| `q` | Quit | Shutdown all nodes gracefully |
+
+### Gameplay Instructions
+#### Human vs. Robot Mode:
+
+1. **Your turn**: Draw your symbol (X or O) on the physical grid using a marker
+2. **Wait for detection**: Keep marker visible for ~3 seconds until move is confirmed
+3. **Robot's turn**: Robot automatically draws its move and returns to home position
+4. Game continues until win/draw condition is met
+5. **New game**: Press `Space` in Pygame window to reset
+
+#### Robot vs. Robot Mode:
+
+1. **Your turn**: Click on an empty cell in the Pygame window
+2. **Robot draws**: Robot switches to your color and draws the selected symbol
+3. **AI's turn**: AI selects its move and robot draws it automatically
+4. Game continues alternating between human-selected and AI-selected moves
+5. **New game**: Press `Space` in Pygame window to reset
+
+### Troubleshooting
+**Issue: Robot doesn't move to home position on startup**
+
+- Ensure robot is not in protective stop or fault state
+- Stop and restart the `ExternalControl` URCap
+
+**Issue: ArUco markers not detected**
+
+- Ensure all 4 corner markers (IDs 4, 5, 6, 7) are visible to camera
+- Check camera feed: Use `i` command in XTerm window to show camera feed with ArUco detection, or:  `ros2 run image_view image_view --ros-args -r image:=/camera/camera/color/image_raw`
+- Try adjusting exposure (default 180 may need adjustment for lighting)
+
+**Issue: X/O symbols not detected**
+
+- Verify markers are the correct colors (blue for X, red for O)
+- Check warped grid output in CV window or RViz Image panel - ensure grid is properly aligned
+- Adjust blue saturation threshold using `s <value>` command (default: 90)
+- Ensure adequate lighting and minimal shadows on grid surface
+
+**Issue: Planning failures / Robot won't execute moves**
+
+- Check RViz planning scene for unexpected collision objects
+- Ensure grid is not too far from the robot
+- Check terminal output for specific MoveIt error messages
+
+**Issue: Serial communication errors (end-effector)**
+
+- Verify Teensy is connected: `ls /dev/ttyACM*`
+- Check serial permissions: `sudo usermod -aG dialout $USER` (logout required)
+- Launch with `enable_serial:=false` if servo not available
 
 ## Results and Demo
 
@@ -225,7 +324,7 @@ The launch command should launch:
 
 ## Repository Structure
 ```
-mtrn4231-project/
+ros-tictactoe-ur/
 ├── src/
 │   ├── brain/                      # High-level game logic and orchestration
 │   │   ├── brain/                  # Python nodes for game management
