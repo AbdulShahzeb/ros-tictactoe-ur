@@ -364,19 +364,7 @@ class TicTacToeNode(Node):
         self.grid_poses_sub = self.create_subscription(
             GridPose, "perception/cell_poses", self.grid_poses_callback, 10
         )
-
-        # Placeholder grid poses
-        self.grid_poses = [
-            Pose2D(x=0.55, y=0.03, theta=78.87),
-            Pose2D(x=0.54, y=0.08, theta=78.87),
-            Pose2D(x=0.53, y=0.14, theta=78.87),
-            Pose2D(x=0.61, y=0.04, theta=78.87),
-            Pose2D(x=0.60, y=0.10, theta=78.87),
-            Pose2D(x=0.59, y=0.16, theta=78.87),
-            Pose2D(x=0.67, y=0.05, theta=78.87),
-            Pose2D(x=0.66, y=0.11, theta=78.87),
-            Pose2D(x=0.65, y=0.17, theta=78.87),
-        ]
+        self.grid_poses = None
 
         self.draw_action_client = ActionClient(
             self, DrawShape, "manipulation/draw_shape"
@@ -398,9 +386,11 @@ class TicTacToeNode(Node):
             f"TicTacToe game started - Human ({self.human_symbol}) vs AI ({self.ai_symbol})"
         )
 
-        # If AI goes first, make its first move
+        # If AI goes first, make its first move after waiting for poses
         if self.ai_player == 1:
-            self.make_ai_move()
+            self.ai_waiting_for_grid = True
+        else:
+            self.ai_waiting_for_grid = False
 
         self.publish_game_state()
 
@@ -584,7 +574,7 @@ class TicTacToeNode(Node):
             if self.enable_serial:
                 self.end_effector_state = EndEffectorState.BLUE
                 self.ser.write(f"{self.end_effector_state}\n".encode())
-            self.make_ai_move()
+            self.ai_waiting_for_grid = True
 
     # Callback for camera-detected board state
     def grid_poses_callback(self, msg):
@@ -592,6 +582,16 @@ class TicTacToeNode(Node):
         Receives board state from perception node.
         """
         self.grid_poses = msg.poses
+        if self.ai_waiting_for_grid:
+            self.ai_waiting_for_grid = False
+            if self.enable_serial:
+                self.end_effector_state = (
+                    EndEffectorState.RED
+                    if self.ai_symbol == "O"
+                    else EndEffectorState.BLUE
+                )
+                self.ser.write(f"{self.end_effector_state}\n".encode())
+            self.make_ai_move()
 
     def process_ui(self):
         """Process pygame events (called by timer)."""
@@ -618,6 +618,11 @@ class TicTacToeNode(Node):
                         "Waiting for robot to finish, please wait..."
                     )
                     continue
+                elif self.ai_waiting_for_grid:
+                    self.get_logger().info(
+                        "AI is waiting for grid poses before making a move..."
+                    )
+                    continue
 
                 # Human move only on their turn
                 if (
@@ -639,15 +644,14 @@ class TicTacToeNode(Node):
         self.ui.draw_board(self.game)
 
         # Show overlay if waiting for robot
-        if self.waiting_for_robot:
+        if self.waiting_for_robot or self.ai_waiting_for_grid:
             overlay = pygame.Surface((self.ui.width, self.ui.height))
             overlay.set_alpha(128)
             overlay.fill((255, 255, 255))
             self.ui.screen.blit(overlay, (0, 0))
 
-            waiting_text = self.ui.info_font.render(
-                "Robot is drawing...", True, (200, 0, 0)
-            )
+            text = "Robot is drawing..." if self.waiting_for_robot else "AI is waiting for grid..."
+            waiting_text = self.ui.info_font.render(text, True, (200, 0, 0))
             waiting_rect = waiting_text.get_rect(
                 center=(self.ui.width // 2, self.ui.height // 2)
             )

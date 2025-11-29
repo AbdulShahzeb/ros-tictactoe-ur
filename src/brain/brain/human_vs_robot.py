@@ -354,19 +354,7 @@ class TicTacToeNode(Node):
         self.grid_poses_sub = self.create_subscription(
             GridPose, "perception/cell_poses", self.grid_poses_callback, 10
         )
-
-        # Default grid poses
-        self.grid_poses = [
-            Pose2D(x=0.55, y=0.03, theta=78.87),
-            Pose2D(x=0.54, y=0.08, theta=78.87),
-            Pose2D(x=0.53, y=0.14, theta=78.87),
-            Pose2D(x=0.61, y=0.04, theta=78.87),
-            Pose2D(x=0.60, y=0.10, theta=78.87),
-            Pose2D(x=0.59, y=0.16, theta=78.87),
-            Pose2D(x=0.67, y=0.05, theta=78.87),
-            Pose2D(x=0.66, y=0.11, theta=78.87),
-            Pose2D(x=0.65, y=0.17, theta=78.87),
-        ]
+        self.grid_poses = None
 
         # Vision-based move detection
         self.UPDATE_FREQUENCY = self.get_parameter("fps").value  # Hz
@@ -396,9 +384,11 @@ class TicTacToeNode(Node):
         )
         self.get_logger().info("Waiting for human to draw their move on the board...")
 
-        # If AI goes first, make its first move
+        # If AI goes first, make its first move after waiting for poses
         if self.ai_player == 1:
-            self.make_ai_move()
+            self.ai_waiting_for_grid = True
+        else:
+            self.ai_waiting_for_grid = False
 
         self.publish_game_state()
 
@@ -566,7 +556,7 @@ class TicTacToeNode(Node):
 
         # If AI goes first, make its move
         if self.ai_player == 1 and not self.game.game_over:
-            self.make_ai_move()
+            self.ai_waiting_for_grid = True
         else:
             self.get_logger().info("Waiting for human move...")
 
@@ -578,6 +568,12 @@ class TicTacToeNode(Node):
 
         # Don't process moves if waiting for robot or game is over
         if self.waiting_for_robot or self.game.game_over:
+            return
+
+        # If AI is waiting for grid poses, make its move now
+        if self.ai_waiting_for_grid:
+            self.ai_waiting_for_grid = False
+            self.make_ai_move()
             return
 
         # Only process if it's human's turn
@@ -653,14 +649,15 @@ class TicTacToeNode(Node):
         self.ui.draw_board(self.game, self.waiting_for_robot)
 
         # Show overlay if waiting for robot
-        if self.waiting_for_robot:
+        if self.waiting_for_robot or self.ai_waiting_for_grid:
             overlay = pygame.Surface((self.ui.width, self.ui.height))
             overlay.set_alpha(128)
             overlay.fill((255, 255, 255))
             self.ui.screen.blit(overlay, (0, 0))
 
+            text = "Robot is drawing..." if self.waiting_for_robot else "AI is waiting for grid..."
             waiting_text = self.ui.info_font.render(
-                "Robot is drawing...", True, (200, 0, 0)
+                text, True, (200, 0, 0)
             )
             waiting_rect = waiting_text.get_rect(
                 center=(self.ui.width // 2, self.ui.height // 2)
