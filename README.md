@@ -154,7 +154,7 @@ flowchart TB;
 ### Computer Vision
 The vision pipeline consists of two stages working in tandem to enable autonomous gameplay:
 
-**Stage 1 - Grid Localization (ArUco Vision)**
+**Stage 1 - Grid Localisation (ArUco Vision)**
 - Detects four ArUco markers positioned at the corners of the physical tic-tac-toe grid
 - Computes the grid's center position (X / Y) and 2D rotation (yaw) using camera intrinsics and marker geometry
 - Broadcasts a `grid_frame` TF transform linking the detected grid to the world coordinate system
