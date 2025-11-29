@@ -2,10 +2,8 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
-from rcl_interfaces.srv import SetParameters
 from sensor_msgs.msg import Image
-from std_msgs.msg import Bool, Header
+from std_msgs.msg import Bool, Header, Int32
 from geometry_msgs.msg import Pose2D, PoseStamped
 from helper.msg import GridPose
 from cv_bridge import CvBridge
@@ -33,6 +31,8 @@ class CellVision(Node):
 
         # --- Publishers & Subscribers ---
         self.image_sub = self.create_subscription(Image, "/perception/warped_grid", self.image_callback, 10)
+        self.set_min_blue_sat_sub = self.create_subscription(Int32, "/kb/set_min_blue_sat", self.set_min_blue_sat_callback, 10)
+        self.min_blue_sat = 90
         self.shutdown_sub = self.create_subscription(
             Bool, "/kb/shutdown", self.shutdown_callback, 10
         )
@@ -41,7 +41,10 @@ class CellVision(Node):
         self.cell_poses_pub = self.create_publisher(GridPose, "/perception/cell_poses", 10)
         self.cell_marker_pub = self.create_publisher(MarkerArray, "/perception/cell_markers", 10)
 
-    
+        # Meshes
+        self.x_mesh_path = "package://perception/meshes/x.STL"
+        self.o_mesh_path = "package://perception/meshes/o.STL"
+
     # ===============================================================
     #   Helper Functions
     # ===============================================================
@@ -102,7 +105,7 @@ class CellVision(Node):
         MIN_PIXELS_FLOOR = 10
 
         # HSV thresholds for blue and red
-        BLUE_LOWER = (100, 150, 60)
+        BLUE_LOWER = (90, self.min_blue_sat, 60)
         BLUE_UPPER = (150, 255, 255)
         RED1_LOWER = (0, 80, 60)
         RED1_UPPER = (10, 255, 255)
@@ -160,6 +163,11 @@ class CellVision(Node):
     # ===============================================================
     #   Callbacks
     # ===============================================================
+    def set_min_blue_sat_callback(self, msg: Int32):
+        """Set minimum blue saturation threshold."""
+        self.min_blue_sat = msg.data
+        self.get_logger().info(f"Minimum blue saturation threshold set to {self.min_blue_sat}")
+
     def image_callback(self, msg: Image):
         """Process warped grid image to find cell poses."""
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
@@ -210,6 +218,10 @@ class CellVision(Node):
     def publish_cell_markers(self, color_codes, time):
         """Publish RViz markers for cell states in grid frame."""
         # Get center positions of each cell in grid frame
+        if len(color_codes) != self.grid_rows * self.grid_cols:
+            self.get_logger().warn("Color codes length does not match grid size.")
+            return
+
         img_h = img_w = 210
         cell_poses = []
         for row in range(self.grid_rows):
@@ -221,35 +233,36 @@ class CellVision(Node):
 
         marker_array = MarkerArray()
         for i, (x, y) in enumerate(cell_poses):
-            if color_codes[i] == 0:
-                continue
-
             marker = Marker()
             marker.header.frame_id = "grid_frame"
             marker.header.stamp = time
             marker.ns = "cell_markers"
             marker.id = i
-            marker.type = Marker.CYLINDER
-            marker.action = Marker.ADD
-            marker.pose.position.x = x
-            marker.pose.position.y = y
-            marker.pose.position.z = 0.0
-            marker.pose.orientation.w = 1.0
-            marker.scale.x = self.cell_size_mm * 0.001
-            marker.scale.y = self.cell_size_mm * 0.001
-            marker.scale.z = 0.01
+            marker.type = Marker.MESH_RESOURCE
+            
+            if color_codes[i] == 0:
+                # Delete marker if cell is empty
+                marker.action = Marker.DELETE
+            else:
+                marker.action = Marker.ADD
+                marker.pose.position.x = x
+                marker.pose.position.y = y
+                marker.pose.position.z = 0.0
+                marker.pose.orientation.w = 1.0
+                marker.mesh_resource = self.x_mesh_path if color_codes[i] == 1 else self.o_mesh_path
+                marker.mesh_use_embedded_materials = False
 
-            # Set color based on detected color code
-            if color_codes[i] == 1:  # Blue
-                marker.color.r = 0.0
-                marker.color.g = 0.0
-                marker.color.b = 1.0
-                marker.color.a = 1.0
-            elif color_codes[i] == -1:  # Red
-                marker.color.r = 1.0
-                marker.color.g = 0.0
-                marker.color.b = 0.0
-                marker.color.a = 1.0
+                # Set color based on detected color code
+                if color_codes[i] == 1:  # Blue
+                    marker.color.r = 0.0
+                    marker.color.g = 0.0
+                    marker.color.b = 1.0
+                    marker.color.a = 1.0
+                elif color_codes[i] == -1:  # Red
+                    marker.color.r = 1.0
+                    marker.color.g = 0.0
+                    marker.color.b = 0.0
+                    marker.color.a = 1.0
 
             marker_array.markers.append(marker)
 

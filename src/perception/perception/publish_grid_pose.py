@@ -64,7 +64,7 @@ class GridPosePublisher(Node):
     def publish(self):
         msg = GridPose()
         msg.header = Header()
-        msg.header.frame_id = "camera_depth_optical_frame"
+        msg.header.frame_id = "camera_rgb_optical_frame"
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.poses = POSES
         msg.colors = (

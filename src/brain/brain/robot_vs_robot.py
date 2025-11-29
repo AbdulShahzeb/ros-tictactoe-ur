@@ -8,6 +8,7 @@ import numpy as np
 import pygame
 import os
 from typing import Optional, Tuple, List
+import serial
 
 import rclpy
 from rclpy.node import Node
@@ -17,6 +18,12 @@ from geometry_msgs.msg import Pose2D
 from helper.msg import GridPose
 from helper.action import DrawShape
 from ament_index_python.packages import get_package_share_directory
+
+
+class EndEffectorState:
+    RED = 135
+    MIDDLE = 90
+    BLUE = 45
 
 
 def encode_board_base3(board_array: np.ndarray) -> int:
@@ -189,7 +196,7 @@ class TicTacToeUI:
         self.RED = (200, 0, 0)
         self.GRAY = (128, 128, 128)
 
-    def draw_board(self, game: TicTacToe, waiting_for_robot: bool = False):
+    def draw_board(self, game: TicTacToe):
         self.screen.fill(self.WHITE)
 
         # Draw grid lines
@@ -237,12 +244,9 @@ class TicTacToeUI:
             else:
                 info_text = "Draw!"
         else:
-            if waiting_for_robot:
-                ai_symbol = "X" if self.ai_player == 1 else "O"
-                info_text = f"AI ({ai_symbol}) is drawing..."
-            elif game.current_player == self.human_player:
+            if game.current_player == self.human_player:
                 human_symbol = "X" if self.human_player == 1 else "O"
-                info_text = f"Your turn ({human_symbol}) - Draw on the board"
+                info_text = f"Your turn ({human_symbol}) - Click to play"
             else:
                 ai_symbol = "X" if self.ai_player == 1 else "O"
                 info_text = f"AI ({ai_symbol}) is thinking..."
@@ -263,6 +267,22 @@ class TicTacToeUI:
 
         pygame.display.flip()
 
+    def get_cell_from_mouse(self, mouse_pos) -> Optional[Tuple[int, int]]:
+        mx, my = mouse_pos
+
+        if (
+            mx < self.board_offset_x
+            or mx > self.board_offset_x + 3 * self.cell_size
+            or my < self.board_offset_y
+            or my > self.board_offset_y + 3 * self.cell_size
+        ):
+            return None
+
+        col = (mx - self.board_offset_x) // self.cell_size
+        row = (my - self.board_offset_y) // self.cell_size
+
+        return (row, col)
+
 
 class TicTacToeNode(Node):
     """
@@ -282,15 +302,20 @@ class TicTacToeNode(Node):
         self.declare_parameter(
             "agent_o_file", os.path.join(package_dir, "models", "menace_agent_o.npy")
         )
+        self.declare_parameter("enable_serial", True)
 
         # Get parameters
         player_str = self.get_parameter("player").value
         agent_x_file = self.get_parameter("agent_x_file").value
         agent_o_file = self.get_parameter("agent_o_file").value
+        self.enable_serial = self.get_parameter("enable_serial").value
 
         # Game setup
         self.human_player = 1 if player_str.lower() == "x" else -1
         self.ai_player = -self.human_player
+        self.end_effector_state = (
+            EndEffectorState.BLUE if self.human_player == 1 else EndEffectorState.RED
+        )
 
         # Load AI agent
         if self.ai_player == 1:
@@ -320,6 +345,10 @@ class TicTacToeNode(Node):
         self.game_state_pub = self.create_publisher(Int32MultiArray, "game_state", 10)
         self.move_request_pub = self.create_publisher(Int32, "robot_move_request", 10)
         self.game_status_pub = self.create_publisher(String, "game_status", 10)
+        self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
+        if self.enable_serial:
+            self.ser = serial.Serial("/dev/ttyACM0", 9600, timeout=1)
+            self.ser.write(f"{self.end_effector_state}\n".encode())
 
         # Subscribers
         self.shutdown_sub = self.create_subscription(
@@ -330,31 +359,12 @@ class TicTacToeNode(Node):
         self.toggle_log_sub = self.create_subscription(
             Bool, "/kb/toggle_log", self.toggle_log_callback, 10
         )
-        self.toggle_log = True
+        self.toggle_log = False
 
         self.grid_poses_sub = self.create_subscription(
             GridPose, "perception/cell_poses", self.grid_poses_callback, 10
         )
-
-        # Default grid poses
-        self.grid_poses = [
-            Pose2D(x=0.55, y=0.03, theta=78.87),
-            Pose2D(x=0.54, y=0.08, theta=78.87),
-            Pose2D(x=0.53, y=0.14, theta=78.87),
-            Pose2D(x=0.61, y=0.04, theta=78.87),
-            Pose2D(x=0.60, y=0.10, theta=78.87),
-            Pose2D(x=0.59, y=0.16, theta=78.87),
-            Pose2D(x=0.67, y=0.05, theta=78.87),
-            Pose2D(x=0.66, y=0.11, theta=78.87),
-            Pose2D(x=0.65, y=0.17, theta=78.87),
-        ]
-
-        # Vision-based move detection
-        self.UPDATE_FREQUENCY = 6.0  # Hz
-        self.CONFIRMATION_TIME = 3.0  # seconds
-        self.WINDOW_SIZE = int(self.UPDATE_FREQUENCY * self.CONFIRMATION_TIME)
-        self.CONFIRMATION_THRESHOLD = 0.8
-        self.cell_observations = [[] for _ in range(9)]
+        self.grid_poses = None
 
         self.draw_action_client = ActionClient(
             self, DrawShape, "manipulation/draw_shape"
@@ -375,11 +385,12 @@ class TicTacToeNode(Node):
         self.get_logger().info(
             f"TicTacToe game started - Human ({self.human_symbol}) vs AI ({self.ai_symbol})"
         )
-        self.get_logger().info("Waiting for human to draw their move on the board...")
 
-        # If AI goes first, make its first move
+        # If AI goes first, make its first move after waiting for poses
         if self.ai_player == 1:
-            self.make_ai_move()
+            self.ai_waiting_for_grid = True
+        else:
+            self.ai_waiting_for_grid = False
 
         self.publish_game_state()
 
@@ -403,10 +414,26 @@ class TicTacToeNode(Node):
 
             if self.toggle_log:
                 self.get_logger().info(
-                    f"AI ({self.ai_symbol}) selected move at row={row}, col={col}"
+                    f"AI ({self.ai_symbol}) playing row={row}, col={col}"
                 )
 
             self.send_draw_shape_goal(row, col, self.ai_symbol)
+
+    def make_human_move(self, row: int, col: int):
+        """Process human move."""
+        if self.game.game_over or self.game.current_player != self.human_player:
+            return False
+
+        if self.game.board[row, col] != 0:
+            self.get_logger().warn(f"Cell ({row}, {col}) already occupied")
+            return False
+
+        self.get_logger().info(
+            f"Human ({self.human_symbol}) played row={row}, col={col}"
+        )
+
+        self.send_draw_shape_goal(row, col, self.human_symbol)
+        return True
 
     def send_draw_shape_goal(self, row: int, col: int, shape: str):
         """Send action goal to manipulation node to draw shape."""
@@ -472,19 +499,20 @@ class TicTacToeNode(Node):
             row, col = self._pending_move
             self.game.make_move(row, col)
             self.publish_game_state()
-            self.check_game_end()
 
-            # If game not over and it's human's turn, wait for their move
-            if (
-                not self.game.game_over
-                and self.game.current_player == self.human_player
-            ):
-                self.get_logger().info("Waiting for human move...")
-        elif self._pending_move:
-            self.get_logger().error(f"Drawing failed: {result.message}. Retrying...")
-            # Retry the move
-            row, col = self._pending_move
-            self.send_draw_shape_goal(row, col, self.ai_symbol)
+            if not self.game.game_over and self.game.current_player == self.ai_player:
+                if self.enable_serial:
+                    self.end_effector_state = (
+                        EndEffectorState.RED
+                        if self.ai_symbol == "O"
+                        else EndEffectorState.BLUE
+                    )
+                    self.ser.write(f"{self.end_effector_state}\n".encode())
+                self.make_ai_move()
+
+            self.check_game_end()
+        else:
+            self.get_logger().error(f"Drawing failed: {result.message}")
 
     def check_game_end(self):
         """Check if game ended and update statistics."""
@@ -536,70 +564,34 @@ class TicTacToeNode(Node):
     def reset_game(self):
         """Reset the game for a new round."""
         self.game.reset()
-        self.cell_observations = [[] for _ in range(9)]
         self.publish_game_state()
         self.publish_game_status("New game started")
-        self.get_logger().info("Game reset")
+        if self.toggle_log:
+            self.get_logger().info("Game reset")
 
         # If AI goes first, make its move
         if self.ai_player == 1 and not self.game.game_over:
-            self.make_ai_move()
-        else:
-            self.get_logger().info("Waiting for human move...")
+            if self.enable_serial:
+                self.end_effector_state = EndEffectorState.BLUE
+                self.ser.write(f"{self.end_effector_state}\n".encode())
+            self.ai_waiting_for_grid = True
 
+    # Callback for camera-detected board state
     def grid_poses_callback(self, msg):
         """
-        Receives board state from perception node and detects new human moves.
+        Receives board state from perception node.
         """
         self.grid_poses = msg.poses
-
-        # Don't process moves if waiting for robot or game is over
-        if self.waiting_for_robot or self.game.game_over:
-            return
-
-        # Only process if it's human's turn
-        if self.game.current_player != self.human_player:
-            return
-
-        new_colors = list(msg.colors)
-
-        # Check for new human moves
-        for i in range(9):
-
-            # Skip if cell is already occupied in game
-            row, col = divmod(i, 3)
-            if self.game.board[row, col] != 0:
-                self.cell_observations[i].clear()
-                continue
-
-            self.cell_observations[i].append(new_colors[i])
-            if len(self.cell_observations[i]) > self.WINDOW_SIZE:
-                self.cell_observations[i].pop(0)
-
-            # Check if we have enough observations
-            if len(self.cell_observations[i]) >= self.WINDOW_SIZE:
-                human_count = self.cell_observations[i].count(self.human_player)
-                confidence = human_count / len(self.cell_observations[i])
-
-                if confidence >= self.CONFIRMATION_THRESHOLD:
-                    if self.toggle_log:
-                        self.get_logger().info(
-                            f"Detected stable human move at ({row}, {col}) with confidence {confidence:.1f}"
-                        )
-
-                    # Register the move
-                    self.game.make_move(row, col)
-                    self.publish_game_state()
-                    self.cell_observations = [[] for _ in range(9)]
-                    self.check_game_end()
-
-                    # If game not over, AI makes its move
-                    if (
-                        not self.game.game_over
-                        and self.game.current_player == self.ai_player
-                    ):
-                        self.make_ai_move()
-                    break
+        if self.ai_waiting_for_grid:
+            self.ai_waiting_for_grid = False
+            if self.enable_serial:
+                self.end_effector_state = (
+                    EndEffectorState.RED
+                    if self.ai_symbol == "O"
+                    else EndEffectorState.BLUE
+                )
+                self.ser.write(f"{self.end_effector_state}\n".encode())
+            self.make_ai_move()
 
     def process_ui(self):
         """Process pygame events (called by timer)."""
@@ -608,7 +600,7 @@ class TicTacToeNode(Node):
             if event.type == pygame.QUIT:
                 self.get_logger().info("UI closed, shutting down node")
                 pygame.quit()
-                self.shutdown_requested = True
+                self.shutdown_pub.publish(Bool(data=True))
                 return
 
             elif event.type == pygame.KEYDOWN:
@@ -617,21 +609,49 @@ class TicTacToeNode(Node):
                 elif event.key == pygame.K_q:
                     self.get_logger().info("Quit requested, shutting down node")
                     pygame.quit()
-                    self.shutdown_requested = True
+                    self.shutdown_pub.publish(Bool(data=True))
                     return
 
-        self.ui.draw_board(self.game, self.waiting_for_robot)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if self.waiting_for_robot:
+                    self.get_logger().info(
+                        "Waiting for robot to finish, please wait..."
+                    )
+                    continue
+                elif self.ai_waiting_for_grid:
+                    self.get_logger().info(
+                        "AI is waiting for grid poses before making a move..."
+                    )
+                    continue
+
+                # Human move only on their turn
+                if (
+                    not self.game.game_over
+                    and self.game.current_player == self.human_player
+                ):
+                    cell = self.ui.get_cell_from_mouse(event.pos)
+                    if cell:
+                        row, col = cell
+                        if self.enable_serial:
+                            self.end_effector_state = (
+                                EndEffectorState.RED
+                                if self.human_symbol == "O"
+                                else EndEffectorState.BLUE
+                            )
+                            self.ser.write(f"{self.end_effector_state}\n".encode())
+                        self.make_human_move(row, col)
+
+        self.ui.draw_board(self.game)
 
         # Show overlay if waiting for robot
-        if self.waiting_for_robot:
+        if self.waiting_for_robot or self.ai_waiting_for_grid:
             overlay = pygame.Surface((self.ui.width, self.ui.height))
             overlay.set_alpha(128)
             overlay.fill((255, 255, 255))
             self.ui.screen.blit(overlay, (0, 0))
 
-            waiting_text = self.ui.info_font.render(
-                "Robot is drawing...", True, (200, 0, 0)
-            )
+            text = "Robot is drawing..." if self.waiting_for_robot else "AI is waiting for grid..."
+            waiting_text = self.ui.info_font.render(text, True, (200, 0, 0))
             waiting_rect = waiting_text.get_rect(
                 center=(self.ui.width // 2, self.ui.height // 2)
             )
@@ -672,6 +692,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        if node.enable_serial:
+            node.ser.write(f"{EndEffectorState.MIDDLE}\n".encode())
         node.destroy_node()
         rclpy.shutdown()
 

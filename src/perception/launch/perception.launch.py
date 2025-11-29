@@ -3,9 +3,7 @@
 Launch file for Perception nodes.
 """
 
-import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 

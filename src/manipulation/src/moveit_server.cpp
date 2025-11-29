@@ -9,6 +9,7 @@
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose2_d.h"
 #include "helper/action/draw_shape.hpp"
+#include "helper/action/erase_grid.hpp"
 #include "helper/srv/move_request.hpp"
 #include "moveit/move_group_interface/move_group_interface.h"
 #include "moveit/planning_scene_interface/planning_scene_interface.h"
@@ -24,7 +25,9 @@
 class MoveitServer {
    public:
     using DrawShape = helper::action::DrawShape;
+    using EraseGrid = helper::action::EraseGrid;
     using GoalHandleDrawShape = rclcpp_action::ServerGoalHandle<DrawShape>;
+    using GoalHandleEraseGrid = rclcpp_action::ServerGoalHandle<EraseGrid>;
 
     MoveitServer(const rclcpp::Node::SharedPtr& node) : node_(node) {
         using namespace std::placeholders;
@@ -40,12 +43,26 @@ class MoveitServer {
         node_->declare_parameter("goal_position_tolerance", 0.001);
         node_->declare_parameter("goal_orientation_tolerance", 0.001);
 
+        // Get enable_serial from launch parameter
+        bool enable_serial = node_->declare_parameter("enable_serial", true);
+
         // Drawing parameters
+        if (enable_serial) {
+            // Using custom end-effector
+            node_->declare_parameter("x_offset", -0.041);
+            node_->declare_parameter("y_offset", -0.106);
+            node_->declare_parameter("drawing_height", 0.188);
+            node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
+        } else {
+            node_->declare_parameter("x_offset", -0.065);
+            node_->declare_parameter("y_offset", -0.017);
+            node_->declare_parameter("drawing_height", 0.170);
+            node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
+        }
         node_->declare_parameter("cell_size", 0.05);
-        node_->declare_parameter("drawing_height", 0.170);
-        node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
-        node_->declare_parameter("x_offset", -0.065);
-        node_->declare_parameter("y_offset", 0.020);
+        node_->declare_parameter("erase_height", 0.180);
+        
+        node_->declare_parameter("erase_offset", -0.010);
         node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -103.5, 106.1, -92.6, -90.0, 0.0});
 
         setupCollisionObjects();
@@ -64,10 +81,13 @@ class MoveitServer {
         service_ =
             node_->create_service<helper::srv::MoveRequest>("/moveit_path_plan", std::bind(&MoveitServer::handle_request, this, _1, _2));
 
-        action_server_ = rclcpp_action::create_server<DrawShape>(
-            node_, "manipulation/draw_shape", std::bind(&MoveitServer::handle_goal, this, _1, _2),
-            std::bind(&MoveitServer::handle_cancel, this, _1), std::bind(&MoveitServer::handle_accepted, this, _1));
+        draw_action_server_ = rclcpp_action::create_server<DrawShape>(
+            node_, "manipulation/draw_shape", std::bind(&MoveitServer::handle_draw_goal, this, _1, _2),
+            std::bind(&MoveitServer::handle_draw_cancel, this, _1), std::bind(&MoveitServer::handle_draw_accepted, this, _1));
 
+        erase_action_server_ = rclcpp_action::create_server<EraseGrid>(
+            node_, "manipulation/erase_grid", std::bind(&MoveitServer::handle_erase_goal, this, _1, _2),
+            std::bind(&MoveitServer::handle_erase_cancel, this, _1), std::bind(&MoveitServer::handle_erase_accepted, this, _1));
         RCLCPP_INFO(node_->get_logger(), "MoveIt Server is ready.");
         return_home();
     }
@@ -182,7 +202,7 @@ class MoveitServer {
     }
 
     // == Action Server Stuff ==
-    rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const DrawShape::Goal> goal) {
+    rclcpp_action::GoalResponse handle_draw_goal(const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const DrawShape::Goal> goal) {
         RCLCPP_INFO(node_->get_logger(), "Received goal request to draw '%s'", goal->shape.c_str());
         (void)uuid;
 
@@ -194,16 +214,40 @@ class MoveitServer {
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
-    rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
+    rclcpp_action::CancelResponse handle_draw_cancel(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
         RCLCPP_INFO(node_->get_logger(), "Received request to cancel goal");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
-    void handle_accepted(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
+    void handle_draw_accepted(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
         std::thread{std::bind(&MoveitServer::execute_draw_shape, this, goal_handle)}.detach();
     }
 
+    // ---------------------------------------------
+    rclcpp_action::GoalResponse handle_erase_goal(const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const EraseGrid::Goal> goal) {
+        RCLCPP_INFO(node_->get_logger(), "Received erase goal for %zu cells", goal->cell_poses.size());
+        (void)uuid;
+
+        if (goal->cell_poses.size() != 6) {
+            RCLCPP_ERROR(node_->get_logger(), "Expected 6 cell poses for erasing, got %zu", goal->cell_poses.size());
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    }
+
+    rclcpp_action::CancelResponse handle_erase_cancel(const std::shared_ptr<GoalHandleEraseGrid> goal_handle) {
+        RCLCPP_INFO(node_->get_logger(), "Received request to cancel erase goal");
+        (void)goal_handle;
+        return rclcpp_action::CancelResponse::ACCEPT;
+    }
+
+    void handle_erase_accepted(const std::shared_ptr<GoalHandleEraseGrid> goal_handle) {
+        std::thread{std::bind(&MoveitServer::execute_erase_grid, this, goal_handle)}.detach();
+    }
+
+    // == Drawing Functions ==
     void execute_draw_shape(const std::shared_ptr<GoalHandleDrawShape> goal_handle) {
         RCLCPP_INFO(node_->get_logger(), "Executing draw shape goal...");
         const auto goal = goal_handle->get_goal();
@@ -431,6 +475,179 @@ class MoveitServer {
         return true;
     }
 
+    // == Erasing Functions ==
+    void execute_erase_grid(const std::shared_ptr<GoalHandleEraseGrid> goal_handle) {
+        RCLCPP_INFO(node_->get_logger(), "Executing erase grid goal...");
+        const auto goal = goal_handle->get_goal();
+        auto feedback = std::make_shared<EraseGrid::Feedback>();
+        auto result = std::make_shared<EraseGrid::Result>();
+
+        // Apply constraints
+        move_group_->clearPathConstraints();
+        if (goal->constraints_identifier != NONE) {
+            move_group_->setPathConstraints(set_constraint(goal->constraints_identifier));
+        }
+
+        bool success = erase_grid_pattern(goal->cell_poses, goal_handle, feedback);
+
+        if (success) {
+            // Return home
+            feedback->status = "returning_home";
+            feedback->progress = 0.95;
+            goal_handle->publish_feedback(feedback);
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            if (return_home()) {
+                result->success = true;
+                result->message = "Grid erased successfully";
+                goal_handle->succeed(result);
+                RCLCPP_INFO(node_->get_logger(), "Erase goal succeeded!");
+            } else {
+                result->success = false;
+                result->message = "Failed to return home after erasing";
+                goal_handle->abort(result);
+            }
+        } else {
+            result->success = false;
+            result->message = "Failed to erase grid";
+            goal_handle->abort(result);
+        }
+
+        // Clear constraints after erasing
+        move_group_->clearPathConstraints();
+    }
+
+    bool erase_grid_pattern(const std::vector<geometry_msgs::msg::Pose2D>& cell_poses,
+                        const std::shared_ptr<GoalHandleEraseGrid>& goal_handle, std::shared_ptr<EraseGrid::Feedback>& feedback) {
+        RCLCPP_INFO(node_->get_logger(), "Erasing grid with serpentine pattern");
+
+        // Get parameters
+        double erase_height = node_->get_parameter("erase_height").as_double();
+        double lift_height = erase_height + 0.05;
+        double x_offset = node_->get_parameter("x_offset").as_double();
+        x_offset *= -1;  // Invert for eraser
+        double y_offset = node_->get_parameter("y_offset").as_double();
+        double erase_offset = node_->get_parameter("erase_offset").as_double();
+        double grid_theta = cell_poses[0].theta;
+        double cos_t = std::cos(grid_theta);
+        double sin_t = std::sin(grid_theta);
+        double fraction_thresh = 0.3;
+        int num_segments = 5;
+
+        // Debug: Print x offset
+        RCLCPP_INFO(node_->get_logger(), "Eraser x_offset: %.3f, y_offset: %.3f", x_offset, y_offset); 
+
+        // Pattern: TL->TR, TR->MR, MR->ML, ML->BL, BL->BR
+        std::vector<geometry_msgs::msg::Pose> waypoints;
+
+        // Helper lambda to transform offset in grid frame to world frame
+        auto apply_grid_offset = [&](double cx, double cy, double dx_grid, double dy_grid) -> std::pair<double, double> {
+            double world_x = cx + x_offset + (dx_grid * cos_t - dy_grid * sin_t);
+            double world_y = cy + y_offset + (dx_grid * sin_t + dy_grid * cos_t);
+            return {world_x, world_y};
+        };
+
+        // Helper lambda to add intermediate waypoints between two points
+        auto add_intermediate_waypoints = [&](double x1, double y1, double x2, double y2, double z) {
+            for (int i = 1; i <= num_segments; i++) {
+                double t = static_cast<double>(i) / num_segments;
+                double interp_x = x1 + t * (x2 - x1);
+                double interp_y = y1 + t * (y2 - y1);
+                waypoints.push_back(create_pose(interp_x, interp_y, z));
+            }
+        };
+
+        // 1. Move to start position (slightly left of top_left center)
+        feedback->status = "moving_to_start";
+        feedback->progress = 0.05;
+        goal_handle->publish_feedback(feedback);
+
+        auto [start_x, start_y] = apply_grid_offset(cell_poses[0].x, cell_poses[0].y, -erase_offset, 0);
+        waypoints.push_back(create_pose(start_x, start_y, lift_height));
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 2. Descend to erase height with intermediate waypoints
+        feedback->status = "descending";
+        feedback->progress = 0.1;
+        goal_handle->publish_feedback(feedback);
+
+        add_intermediate_waypoints(start_x, start_y, start_x, start_y, lift_height);
+        waypoints.push_back(create_pose(start_x, start_y, erase_height));
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 3. TL to TR (slightly right of TR) with intermediate waypoints
+        feedback->status = "erasing_row_1";
+        feedback->progress = 0.2;
+        goal_handle->publish_feedback(feedback);
+
+        auto [tr_x, tr_y] = apply_grid_offset(cell_poses[1].x, cell_poses[1].y, erase_offset, 0);
+        add_intermediate_waypoints(start_x, start_y, tr_x, tr_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 4. TR to MR with intermediate waypoints
+        feedback->status = "erasing_row_2_part_1";
+        feedback->progress = 0.35;
+        goal_handle->publish_feedback(feedback);
+
+        auto [mr_x, mr_y] = apply_grid_offset(cell_poses[2].x, cell_poses[2].y, erase_offset, 0);
+        add_intermediate_waypoints(tr_x, tr_y, mr_x, mr_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 5. MR to ML with intermediate waypoints
+        feedback->status = "erasing_row_2_part_2";
+        feedback->progress = 0.5;
+        goal_handle->publish_feedback(feedback);
+
+        auto [ml_x, ml_y] = apply_grid_offset(cell_poses[3].x, cell_poses[3].y, -erase_offset, 0);
+        add_intermediate_waypoints(mr_x, mr_y, ml_x, ml_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 6. ML to BL with intermediate waypoints
+        feedback->status = "erasing_row_3_part_1";
+        feedback->progress = 0.65;
+        goal_handle->publish_feedback(feedback);
+
+        auto [bl_x, bl_y] = apply_grid_offset(cell_poses[4].x, cell_poses[4].y, -erase_offset, 0);
+        add_intermediate_waypoints(ml_x, ml_y, bl_x, bl_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 7. BL to BR with intermediate waypoints
+        feedback->status = "erasing_row_3_part_2";
+        feedback->progress = 0.8;
+        goal_handle->publish_feedback(feedback);
+
+        auto [br_x, br_y] = apply_grid_offset(cell_poses[5].x, cell_poses[5].y, erase_offset, 0);
+        add_intermediate_waypoints(bl_x, bl_y, br_x, br_y, erase_height);
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+        waypoints.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 8. Lift up with intermediate waypoints
+        feedback->status = "lifting";
+        feedback->progress = 0.9;
+        goal_handle->publish_feedback(feedback);
+
+        add_intermediate_waypoints(br_x, br_y, br_x, br_y, erase_height);
+        waypoints.push_back(create_pose(br_x, br_y, lift_height));
+        if (!execute_cartesian_path(waypoints, fraction_thresh)) return false;
+
+        RCLCPP_INFO(node_->get_logger(), "Grid erased successfully");
+        return true;
+    }
+
+    // == Helper Functions ==
     geometry_msgs::msg::Pose create_pose(double x, double y, double z) {
         // Create pose with fixed downward orientation
         geometry_msgs::msg::Quaternion q;
@@ -448,13 +665,13 @@ class MoveitServer {
         return pose;
     }
 
-    bool execute_cartesian_path(const std::vector<geometry_msgs::msg::Pose>& waypoints) {
+    bool execute_cartesian_path(const std::vector<geometry_msgs::msg::Pose>& waypoints, double fraction_thresh = 0.90) {
         moveit_msgs::msg::RobotTrajectory trajectory;
         const double eef_step = 0.005;
         const double jump_threshold = 0.0;
         double fraction = move_group_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
 
-        if (fraction < 0.90) {
+        if (fraction < fraction_thresh) {
             RCLCPP_ERROR(node_->get_logger(), "Cartesian path planning failed (%.2f%% achieved)", fraction * 100.0);
             return false;
         }
@@ -606,7 +823,8 @@ class MoveitServer {
     rclcpp::Node::SharedPtr node_;
     std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
     rclcpp::Service<helper::srv::MoveRequest>::SharedPtr service_;
-    rclcpp_action::Server<DrawShape>::SharedPtr action_server_;
+    rclcpp_action::Server<DrawShape>::SharedPtr draw_action_server_;
+    rclcpp_action::Server<EraseGrid>::SharedPtr erase_action_server_;
 
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     sensor_msgs::msg::JointState::SharedPtr latest_joint_state_;

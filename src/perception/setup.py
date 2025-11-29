@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         # Include meshes
         (os.path.join('share', package_name, 'meshes'), 
-            glob('meshes/*.stl')),
+            glob('meshes/*.stl') + glob('meshes/*.STL')),
         # Include launch files
         (os.path.join('share', package_name, 'launch'), 
             glob('launch/*.launch.py')),

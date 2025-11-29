@@ -25,11 +25,11 @@ class ArucoVisionNode(Node):
 
         # --- CV2 Setup ---
         self.bridge = CvBridge()
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.detector_params = cv2.aruco.DetectorParameters()
 
         # --- Declare and get ROS parameters ---
-        self.declare_parameter("exposure", 90)
+        self.declare_parameter("exposure", 180)
         self.exposure = (
             self.get_parameter("exposure").get_parameter_value().integer_value
         )
@@ -53,7 +53,7 @@ class ArucoVisionNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
-        self.broadcast_camera_transform()
+        self.camera_broadcaster = self.create_timer(3.0, self.broadcast_camera_transform)
 
         # --- Publishers and Subscribers ---
         self.camera_sub = self.create_subscription(
@@ -71,6 +71,11 @@ class ArucoVisionNode(Node):
             Bool, "/kb/toggle_log", self.log_callback, 10
         )
         self.toggle_log = False
+
+        self.enable_prelim_cv_sub = self.create_subscription(
+            Bool, "/kb/enable_prelim_cv", self.enable_prelim_cv_callback, 10
+        )
+        self.prelim_cv_enabled = False
 
         self.shutdown_sub = self.create_subscription(
             Bool, "/kb/shutdown", self.shutdown_callback, 10
@@ -92,10 +97,10 @@ class ArucoVisionNode(Node):
     # ===============================================================
     def broadcast_camera_transform(self):
         """Broadcast static transform from camera to world frame"""
+        child_frame_ids = ["camera_rgb_optical_frame", "camera_color_optical_frame", "camera_color_frame", "camera_link"]
         t = TransformStamped()
         t.header.stamp = rclpy.time.Time(seconds=0).to_msg()
         t.header.frame_id = "world"
-        t.child_frame_id = "camera_depth_optical_frame"
 
         t.transform.translation.x = self.cam_to_base_translation[0]
         t.transform.translation.y = self.cam_to_base_translation[1]
@@ -107,7 +112,9 @@ class ArucoVisionNode(Node):
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
 
-        self.static_tf_broadcaster.sendTransform(t)
+        for child_frame_id in child_frame_ids:
+            t.child_frame_id = child_frame_id
+            self.static_tf_broadcaster.sendTransform(t)
 
     def pixel_to_grid_coords(
         self, x_px: float, y_px: float, img_w: int, img_h: int
@@ -168,6 +175,12 @@ class ArucoVisionNode(Node):
                 self.exposure_param_timer.cancel()
                 self.exposure_param_timer = None
 
+    def enable_prelim_cv_callback(self, msg):
+        """Enable preliminary CV window display"""
+        self.prelim_cv_enabled = not self.prelim_cv_enabled
+        if not self.prelim_cv_enabled:
+            cv2.destroyWindow("Aruco Detection")
+
     # ===============================================================
     #   ArUco detection
     # ===============================================================
@@ -212,7 +225,8 @@ class ArucoVisionNode(Node):
                 else:
                     self.get_logger().warn("Homography matrix is None")
 
-        cv2.imshow("Aruco Detection", frame)
+        if self.prelim_cv_enabled:
+            cv2.imshow("Aruco Detection", frame)
         cv2.waitKey(1)
 
     def get_grid_corners(self, ids, corners):
@@ -264,7 +278,7 @@ class ArucoVisionNode(Node):
         t = TransformStamped()
         # Use latest time for transform
         t.header.stamp = time
-        t.header.frame_id = "camera_depth_optical_frame"
+        t.header.frame_id = "camera_rgb_optical_frame"
         t.child_frame_id = "grid_frame"
         t.transform.translation.x = float(x_m)
         t.transform.translation.y = float(y_m)

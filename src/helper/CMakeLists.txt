@@ -20,6 +20,7 @@ set(srv_files
 
 set(action_files
   "action/DrawShape.action"
+  "action/EraseGrid.action"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

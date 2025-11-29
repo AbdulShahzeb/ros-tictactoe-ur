@@ -18,7 +18,7 @@ public:
 
     // Fill out the transformation stamped message
     transformStamped_.header.frame_id = "base_link";
-    transformStamped_.child_frame_id = "camera_depth_optical_frame";
+    transformStamped_.child_frame_id = "camera_rgb_optical_frame";
     transformStamped_.transform.translation.x = 0.850;
     transformStamped_.transform.translation.y = 0.231;
     transformStamped_.transform.translation.z = 0.912;

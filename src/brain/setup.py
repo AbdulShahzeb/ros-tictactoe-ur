@@ -12,8 +12,10 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/rviz', ['rviz/tictactoe.rviz']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'models'), glob('models/*.npy')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,7 +30,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'brain_node = brain.brain_node:main',
+            'human_vs_robot_node = brain.human_vs_robot:main',
+            'robot_vs_robot_node = brain.robot_vs_robot:main',
             'keyboard_node = brain.keyboard_node:main',
         ],
     },
