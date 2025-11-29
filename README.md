@@ -2,6 +2,7 @@
 - [System Architecture](#system-architecture)
   - [ROS Architecture](#ros-architecture)
   - [Package-level Architecture](#package-level-architecture)
+    - [Package Responsibilities](#package-responsibilities)
   - [Behaviour Tree](#behaviour-tree)
     - [Player vs. Robot Game Mode](#player-vs-robot-game-mode)
     - [Robot vs. Robot Game Mode](#robot-vs-robot-game-mode)
@@ -33,8 +34,64 @@ TODO
 ## System Architecture
 
 ### ROS Architecture
+TODO
 
 ### Package-level Architecture
+The system is organised into four main packages that communicate through ROS 2 topics, services, and actions:
+
+```mermaid
+graph TB
+    subgraph brain["🧠 Brain Package"]
+        keyboard[keyboard_node]
+        hvr[human_vs_robot / robot_vs_robot]
+    end
+
+    subgraph perception["👁️ Perception Package"]
+        aruco[aruco_vision_node]
+        cell[cell_vision_node]
+    end
+
+    subgraph manipulation["🦾 Manipulation Package"]
+        moveit[moveit_server]
+    end
+
+    subgraph helper["📦 Helper Package"]
+        msgs[Custom Messages<br/>GridPose]
+        srvs[Custom Services<br/>MoveRequest]
+        actions[Custom Actions<br/>DrawShape<br/>EraseGrid]
+    end
+
+    %% Perception to Brain
+    aruco -->|/perception/warped_grid<br/>sensor_msgs/Image| cell
+    cell -->|/perception/cell_poses<br/>GridPose| hvr
+
+    %% Brain to Manipulation
+    hvr -.->|/manipulation/draw_shape<br/>DrawShape Action| moveit
+    
+    %% Keyboard to Perception
+    keyboard -->|/kb/enable_prelim_cv<br/>std_msgs/Bool| aruco
+    keyboard -->|/kb/set_min_blue_sat<br/>std_msgs/Int32| cell
+    
+    %% Keyboard to Manipulation
+    keyboard ==>|/moveit_path_plan<br/>MoveRequest Service| moveit
+
+    %% Helper dependencies
+    cell -.->|uses| msgs
+    hvr -.->|uses| msgs
+    hvr -.->|uses| actions
+    moveit -.->|uses| actions
+    moveit -.->|uses| srvs
+    keyboard -.->|uses| srvs
+```
+
+#### Package Responsibilities
+| package | Purpose | Key Nodes |
+|---|---|---|
+| `brain` | Game logic, AI decision-making, orchestration | `human_vs_robot`, `robot_vs_robot`, `keyboard_node` |
+| `perception` | CV, grid localisation, symbol detection | `aruco_vision_node`, `cell_vision_node` |
+| `manipulation` | Motion planning, trajectory execution, drawing | `moveit_server` |
+| `helper` | Shared interfaces and message definitions | Custom msg/srv/action types |
+
 
 ### Behaviour Tree
 
@@ -116,6 +173,7 @@ The vision pipeline consists of two stages working in tandem to enable autonomou
 The pipeline enables fully autonomous human move detection in the human vs. robot mode, eliminating the need for manual input devices.
 
 ### Custom End-Effector
+TODO
 
 ### System Visualisation
 The system uses RViz as the primary visualisation tool, providing real-time feedback on robot state, perception data, and coordinate frames:
@@ -179,7 +237,7 @@ source install/setup.bash
 ```
 
 ### Hardware Setup
-
+TODO
 
 ## Running the System
 **Quick Start**
@@ -309,18 +367,18 @@ The XTerm window provides manual control during gameplay:
 - Launch with `enable_serial:=false` if servo not available
 
 ## Results and Demo
-
+TODO
 
 ## Discussion and Future Work
-
+TODO
 
 ## Contributors and Roles
 | Contributor | Role |
 |---|---|
-| Abdul |  |
-| Dave |  |
-| Leo |  |
-| Florian |  |
+| Abdul | Game logic/orchestration, motion planning, localisation, visualisation |
+| Dave | End-effector hardware design and testing |
+| Leo | End-effector hardware design and testing |
+| Florian | Grid detection, cell state detection (X/O recognition) |
 
 ## Repository Structure
 ```
@@ -343,9 +401,9 @@ ros-tictactoe-ur/
 │   │
 │   ├── perception/                 # Computer vision and sensing
 │   │   ├── perception/
-│   │   │   ├── aruco_vision.py     # ArUco marker detection and grid localization
+│   │   │   ├── aruco_vision.py     # ArUco marker detection and grid localisation
 │   │   │   └── cell_vision.py      # Cell state detection (X/O recognition)
-│   │   └── meshes/                 # 3D models for RViz visualization
+│   │   └── meshes/                 # 3D models for RViz visualisation
 │   │
 │   ├── helper/                     # Custom message, service, and action definitions
 │   │   ├── msg/                    # Custom message types (GridPose)
@@ -359,4 +417,4 @@ ros-tictactoe-ur/
 ```
 
 ## References and Acknowledgements
-We would like to acknowledge Alex Cronin, our lab demonstrator, for his feedback and guidance throughout the project's development. We would like to thank Lachlan Wallbridge for his help with coordinate transforms and grid detection CV.
+We would like to acknowledge Alex Cronin, our lab demonstrator, for his feedback and guidance throughout the project's development. We would like to thank Lachlan Wallbridge for his help with coordinate transforms and grid detection CV. We thank David Nie for the [MoveIt path planning server](https://github.com/DaviddNie/UR10e_vision_based_fruit_harvesting/blob/main/src/moveit_path_planner/src/moveit_path_planning_server.cpp) that formed the basis for the adapted implementation used in this project.
