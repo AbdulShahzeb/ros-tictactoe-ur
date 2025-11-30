@@ -1,4 +1,9 @@
 - [Project Overview](#project-overview)
+  - [The Problem](#the-problem)
+  - [Our Solution](#our-solution)
+  - [Target Users](#target-users)
+  - [Robot Functionality](#robot-functionality)
+  - [System Demonstration](#system-demonstration)
 - [System Architecture](#system-architecture)
   - [ROS Architecture](#ros-architecture)
   - [Package-level Architecture](#package-level-architecture)
@@ -19,17 +24,60 @@
   - [Expected Behaviour](#expected-behaviour)
   - [Keyboard Commands](#keyboard-commands)
   - [Gameplay Instructions](#gameplay-instructions)
-    - [Human vs. Robot Mode:](#human-vs-robot-mode)
-    - [Robot vs. Robot Mode:](#robot-vs-robot-mode)
+    - [Human vs. Robot Mode](#human-vs-robot-mode)
+    - [Robot vs. Robot Mode](#robot-vs-robot-mode)
   - [Troubleshooting](#troubleshooting)
 - [Results and Demo](#results-and-demo)
 - [Discussion and Future Work](#discussion-and-future-work)
+  - [Engineering Challenges and Solutions](#engineering-challenges-and-solutions)
+  - [Future Improvements](#future-improvements)
+  - [Novelty, Creativity, and Effectiveness](#novelty-creativity-and-effectiveness)
 - [Contributors and Roles](#contributors-and-roles)
 - [Repository Structure](#repository-structure)
 - [References and Acknowledgements](#references-and-acknowledgements)
 
 ## Project Overview
-TODO
+
+### The Problem
+
+The field of robotics has experienced significant growth over the past decade, with advancements in computing hardware, algorithms, and perception contributing to the diversification of applications in our daily lives. As robotics becomes more integrated into everyday contexts, it is imperative to familiarise oneself with the technology through hands-on education.
+
+Robotics education courses and toolkits provide an effective way for learners to expand their knowledge in the field. 6-DOF manipulators are widely adopted in robotics education as they enable versatile movements similar to the human arm, offering a comprehensive learning experience across a wide range of skills. However, there is currently no readily available interactive project that fully integrates ROS 2 middleware with a 6-DOF manipulator in an engaging, game-based format. Educational robotics projects often exist in isolation: either as pure simulation exercises or as hardware demonstrations with limited interactivity. This gap represents a lack of comprehensive educational platforms that bridge theoretical concepts with practical, real-world robotics applications.
+
+### Our Solution
+
+This project provides a complete, open-source toolkit for playing tic-tac-toe with a UR5e robotic arm, designed to bridge the gap between theoretical robotics concepts and practical implementation. The system demonstrates:
+
+- **Vision-based perception** using ArUco marker detection and colour segmentation
+- **Motion planning and control** through MoveIt integration with custom trajectory execution
+- **AI decision-making** via a trained MENACE (Matchbox Educable Noughts and Crosses Engine) agent
+- **Closed-loop operation** with continuous visual feedback and adaptive gameplay
+- **Custom hardware integration** including a dual-marker end-effector and servo control
+
+### Target Users
+
+- **Universities and technical institutions** seeking engaging robotics lab demonstrations
+- **Educators** teaching robotics system integration, computer vision, or AI/ML applications
+- **Robotics clubs and makerspaces** looking for engaging, intermediate-level projects
+- **Advanced hobbyists and researchers** interested in ROS 2, MoveIt, and vision-based manipulation
+
+### Robot Functionality
+
+The UR5e manipulator, equipped with a custom dual-marker end-effector, autonomously plays tic-tac-toe by reacting to either physically drawn moves on a grid or mouse-selected moves on the UI. The system:
+
+1. **Perceives the game state** using an overhead RealSense camera to detect ArUco markers and colour-coded symbols
+2. **Plans moves** using a trained reinforcement learning agent
+3. **Executes drawing motions** with MoveIt-planned Cartesian trajectories while avoiding collisions
+4. **Monitors gameplay** through continuous vision feedback, detecting human moves and verifying robot actions
+5. **Adapts in real-time** to changing board states, maintaining closed-loop control throughout gameplay
+
+### System Demonstration
+
+The following video shows one complete game cycle demonstrating closed-loop behaviour with real-time visualisation in RViz:
+
+`Placeholder: ![Tic-Tac-Toe Robot Demo](media/demo.mp4)`
+
+*Video: Robot autonomously detects human move (blue X), plans AI response (red O), executes drawing trajectory, and updates game state visualisation.*
 
 ## System Architecture
 
@@ -336,7 +384,7 @@ The XTerm window provides manual control during gameplay:
 | `q` | Quit | Shutdown all nodes gracefully |
 
 ### Gameplay Instructions
-#### Human vs. Robot Mode:
+#### Human vs. Robot Mode
 
 1. **Your turn**: Draw your symbol (X or O) on the physical grid using a marker
 2. **Wait for detection**: Keep marker visible for ~3 seconds until move is confirmed
@@ -344,7 +392,7 @@ The XTerm window provides manual control during gameplay:
 4. Game continues until win/draw condition is met
 5. **New game**: Press `Space` in Pygame window to reset
 
-#### Robot vs. Robot Mode:
+#### Robot vs. Robot Mode
 
 1. **Your turn**: Click on an empty cell in the Pygame window
 2. **Robot draws**: Robot switches to your color and draws the selected symbol
@@ -379,7 +427,7 @@ The XTerm window provides manual control during gameplay:
 
 **Issue: Serial communication errors (end-effector)**
 
-- Verify Teensy is connected: `ls /dev/ttyACM*`
+- Verify Teensy is connected: `ls /dev/ttyACM0`
 - Check serial permissions: `sudo usermod -aG dialout $USER` (logout required)
 - Launch with `enable_serial:=false` if servo not available
 
@@ -387,7 +435,56 @@ The XTerm window provides manual control during gameplay:
 TODO
 
 ## Discussion and Future Work
-TODO
+
+### Engineering Challenges and Solutions
+
+**End-Effector Mechanical Design**
+
+The main challenge in end-effector development was tolerancing the pen holder mechanisms. The initial cylindrical rail design prioritised smooth movement but resulted in excessive rotational freedom. Tightening tolerances created assembly difficulties, with one early prototype permanently trapping the servo. After iteration, we kept the original tolerance as it provided the best balance between movement fluidity and positioning accuracy.
+
+Further tolerancing issues emerged in the pen retention cavity. Sub-millimetre diameter variations along the pen body significantly affected protrusion length. Multiple iterations refined these dimensions to achieve consistent pen positioning during drawing.
+
+**Motion Planning and Trajectory Optimisation**
+
+Early MoveIt planning produced erratic trajectories with excessive joint rotations and long execution times. The planner explored the full joint space without prioritising consistent end-effector orientation. Implementing orientation constraints to keep the end-effector facing downward drastically improved trajectory quality, reducing planning time and producing smooth, predictable motions.
+
+**Computer Vision Robustness**
+
+Symbol (X/O) CV detection was initially inconsistent, with both false negatives and positives. The issues stemmed from faded marker ink and lighting-dependent HSV threshold performance. We resolved this by replacing markers with high-saturation alternatives and implementing adjustable saturation thresholds via the keyboard interface (`set_min_blue_sat`), allowing operators to tune detection for current lighting conditions.
+
+**URDF Integration and Collision Geometry**
+
+Integrating the custom end-effector URDF initially caused planning failures due to mismatched visual and collision geometries. The collision boxes didn't accurately represent the end-effector dimensions. Adjusting the collision geometry in the URDF resolved these failures.
+
+### Future Improvements
+
+**Hardware**
+
+The current design is optimised for a single marker model. Version 2.0 could support universal compatibility by reducing pen-to-holder contact to a single retention point rather than full-length contact. Additional improvements include better cable management and replacing cylindrical guide rails with angled profiles for smoother movement.
+
+**Software and Perception**
+
+An automated calibration procedure at startup would eliminate manual threshold tuning. Users could present each marker colour to the camera and the system would compute optimal HSV thresholds automatically.
+
+Grid erasing functionality between games could be added in Version 2.0 to enable fully autonomous multi-game sessions. This would require an end-effector fitted with a whiteboard eraser.
+
+The perception pipeline could also support dynamic grid detection for various whiteboard sizes and orientations.
+
+### Novelty, Creativity, and Effectiveness
+
+**Hardware Simplicity**
+
+The end-effector design prioritises simplicity and accessibility. With each component designed to be simply printed and constructed, all physical components required are provided to the user to ensure learning opportunities are not impacted by minor hardware issues. Distributing STL files rather than pre-assembled hardware reduces costs while teaching 3D printing alongside robotics. Students can rapidly iterate or repair components without specialised tools.
+
+**Fully Autonomous Operation**
+
+Unlike typical educational demos relying on manual input, this system achieves genuine closed-loop autonomy. The vision pipeline continuously monitors game state and detects human moves without input devices. The confidence-based detection (80% consistency over 3 seconds) balances robustness with simplicity, making it an excellent teaching example.
+
+**Integrated Learning Platform**
+
+The system covers multiple robotics domains through a single engaging application: computer vision (ArUco detection, colour segmentation, transforms), motion planning (MoveIt, collision avoidance), AI (MENACE reinforcement learning), system integration (ROS 2, custom interfaces), and hardware design (CAD, 3D printing, servo control).
+
+The tic-tac-toe context provides low barrier to entry while maintaining technical depth. Students naturally want to beat the robot, driving experimentation and learning. The open-source nature and documentation make it straightforward for institutions to deploy and customise.
 
 ## Contributors and Roles
 | Contributor | Role |
