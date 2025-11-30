@@ -173,7 +173,24 @@ The vision pipeline consists of two stages working in tandem to enable autonomou
 The pipeline enables fully autonomous human move detection in the human vs. robot mode, eliminating the need for manual input devices.
 
 ### Custom End-Effector
-TODO
+
+The custom end-effector design prioritises simplicity in construction, featuring an entirely FDM 3D-printed servo housing that toggles between two pen holders to draw X's and O's.
+
+**Mechanical Design**
+- The main structure connects to the UR5e via the quick-release mechanism with integrated cable management for servo wiring routed to the Teensy controller
+- A rack-and-pinion mechanism (pen holders and central gear) raises and lowers each pen independently via 180° servo rotation
+- Pen holder movement is constrained by integrated rail barriers and the pen cap design
+
+**Pen Retention System**
+- Pen caps friction-fit onto the top of each holder, integrating springs that provide downward force to press markers against the whiteboard
+- The spring mechanism allows height variability to accommodate uneven surfaces and simplify z-offset calibration
+- Funnel-shaped interior holds pens securely while allowing ~¼ of the pen tip to protrude, providing additional z-offset tolerance
+- Internal cavity matches pen diameter to maintain alignment during drawing operations
+
+**Operation**
+- Serial commands from the brain node trigger servo rotation to switch between blue (X) and red (O) markers
+- Spring-loaded design maintains consistent contact pressure across varying grid heights
+- Tool change occurs in <1 second between drawing operations
 
 ### System Visualisation
 The system uses RViz as the primary visualisation tool, providing real-time feedback on robot state, perception data, and coordinate frames:
@@ -417,4 +434,4 @@ ros-tictactoe-ur/
 ```
 
 ## References and Acknowledgements
-We would like to acknowledge Alex Cronin, our lab demonstrator, for his feedback and guidance throughout the project's development. We would like to thank Lachlan Wallbridge for his help with coordinate transforms and grid detection CV. We thank David Nie for the [MoveIt path planning server](https://github.com/DaviddNie/UR10e_vision_based_fruit_harvesting/blob/main/src/moveit_path_planner/src/moveit_path_planning_server.cpp) that formed the basis for the adapted implementation used in this project.
+We would like to acknowledge Alex Cronin, our lab demonstrator, for his feedback and guidance throughout the project's development. We would like to thank Lachlan Wallbridge from team M14-2 for his help with coordinate transforms and grid detection CV. We thank David Nie for the [MoveIt path planning server](https://github.com/DaviddNie/UR10e_vision_based_fruit_harvesting/blob/main/src/moveit_path_planner/src/moveit_path_planning_server.cpp) that formed the basis for the adapted implementation used in this project.
