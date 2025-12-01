@@ -16,7 +16,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     pkg_dir = get_package_share_directory('brain')
     use_fake = True
-    gamemode = "robot"
+    gamemode = "human"
 
     # Default paths for agent files
     default_agent_x = os.path.join(pkg_dir, 'models', 'menace_agent_x.npy')

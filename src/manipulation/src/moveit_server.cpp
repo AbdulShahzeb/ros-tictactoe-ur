@@ -43,25 +43,13 @@ class MoveitServer {
         node_->declare_parameter("goal_position_tolerance", 0.001);
         node_->declare_parameter("goal_orientation_tolerance", 0.001);
 
-        // Get enable_serial from launch parameter
-        bool enable_serial = node_->declare_parameter("enable_serial", true);
-
         // Drawing parameters
-        if (enable_serial) {
-            // Using custom end-effector
-            node_->declare_parameter("x_offset", -0.041);
-            node_->declare_parameter("y_offset", -0.106);
-            node_->declare_parameter("drawing_height", 0.203);
-            node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
-        } else {
-            node_->declare_parameter("x_offset", -0.065);
-            node_->declare_parameter("y_offset", -0.017);
-            node_->declare_parameter("drawing_height", 0.203);
-            node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
-        }
+        node_->declare_parameter("x_offset", -0.041);
+        node_->declare_parameter("y_offset", -0.106);
+        node_->declare_parameter("drawing_height", 0.203);
+        node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
         node_->declare_parameter("cell_size", 0.05);
         node_->declare_parameter("erase_height", 0.180);
-        
         node_->declare_parameter("erase_offset", -0.010);
         node_->declare_parameter("home_joint_positions", std::vector<double>{0.0, -103.5, 106.1, -92.6, -90.0, 0.0});
 
