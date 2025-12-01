@@ -51,12 +51,12 @@ class MoveitServer {
             // Using custom end-effector
             node_->declare_parameter("x_offset", -0.041);
             node_->declare_parameter("y_offset", -0.106);
-            node_->declare_parameter("drawing_height", 0.188);
+            node_->declare_parameter("drawing_height", 0.203);
             node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
         } else {
             node_->declare_parameter("x_offset", -0.065);
             node_->declare_parameter("y_offset", -0.017);
-            node_->declare_parameter("drawing_height", 0.170);
+            node_->declare_parameter("drawing_height", 0.203);
             node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
         }
         node_->declare_parameter("cell_size", 0.05);

@@ -23,7 +23,7 @@ from time import sleep
 
 
 class EndEffectorState(Enum):
-    MARKER = 110
+    MARKER = 135
     MIDDLE = 90
 
 
@@ -279,7 +279,7 @@ class TicTacToeNode(Node):
     """
 
     def __init__(self):
-        super().__init__("tictactoe_node")
+        super().__init__("human_vs_robot_node")
 
         # Declare parameters
         package_dir = get_package_share_directory("brain")
@@ -291,7 +291,7 @@ class TicTacToeNode(Node):
             "agent_o_file", os.path.join(package_dir, "models", "menace_agent_o.npy")
         )
         self.declare_parameter("fps", 15)
-        self.declare_parameter("enable_serial", False)
+        self.declare_parameter("enable_serial", True)
 
         # Get parameters
         player_str = self.get_parameter("player").value
@@ -415,6 +415,7 @@ class TicTacToeNode(Node):
                     f"AI ({self.ai_symbol}) selected move at row={row}, col={col}"
                 )
 
+            self.ai_waiting_for_grid = False
             self.send_draw_shape_goal(row, col, self.ai_symbol)
 
     def send_draw_shape_goal(self, row: int, col: int, shape: str):

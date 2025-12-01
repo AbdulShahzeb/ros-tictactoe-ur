@@ -11,6 +11,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
+from launch.substitutions import PythonExpression
 
 
 def generate_launch_description():
@@ -21,6 +22,12 @@ def generate_launch_description():
     default_agent_o = os.path.join(pkg_dir, 'models', 'menace_agent_o.npy')
 
     # Declare launch arguments
+    DeclareLaunchArgument(
+        'fake',
+        default_value='false',
+        description='Use fake robot for testing'
+    )
+
     player_arg = DeclareLaunchArgument(
         'player',
         default_value='x',
@@ -51,13 +58,15 @@ def generate_launch_description():
         description='Enable serial communication with robot'
     )
 
-    gamemode_selection_arg = DeclareLaunchArgument(
-        'gamemode',
-        default_value='human',
-        description='Game mode selection: human (human vs robot), robot (robot vs robot)'
-    )
+    #DeclareLaunchArgument(
+    #    'gamemode',
+    #    default_value='human',
+    #    description='Game mode selection: human (human vs robot), robot (robot vs robot)'
+    #)
 
-    use_fake = False
+    use_fake = True
+    gamemode = "robot"
+
     ip_address = "192.168.56.101"
     if not use_fake:
         ip_address = "192.168.0.100"
@@ -69,7 +78,7 @@ def generate_launch_description():
     kinematics_params_file = os.path.join(
         get_package_share_directory('brain'),
         'config',
-        'robot1_calib.yaml'
+        'robot6_calib.yaml'
     )
 
 
@@ -78,9 +87,9 @@ def generate_launch_description():
         'ur_type': 'ur5e',
         'robot_ip': ip_address,
         'launch_rviz': 'false',
-        'kinematics_params': kinematics_params_file,
     }
     if not use_fake:
+        ur_control_launch_args['kinematics_params'] = kinematics_params_file
         ur_control_launch_args['description_file'] = description_file
 
     ur_control_launch = IncludeLaunchDescription(
@@ -166,10 +175,7 @@ def generate_launch_description():
 
 
     # Brain node
-    if LaunchConfiguration('gamemode') == 'robot':
-        brain_executable = 'robot_vs_robot'
-    else:
-        brain_executable = 'human_vs_robot'
+    brain_executable = 'robot_vs_robot_node' if gamemode == 'robot' else 'human_vs_robot_node'
     brain_node = Node(
         package='brain',
         executable=brain_executable,

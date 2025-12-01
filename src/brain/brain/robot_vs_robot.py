@@ -291,7 +291,7 @@ class TicTacToeNode(Node):
     """
 
     def __init__(self):
-        super().__init__("tictactoe_node")
+        super().__init__("robot_vs_robot_node")
 
         # Declare parameters
         package_dir = get_package_share_directory("brain")

@@ -34,7 +34,6 @@ setup(
         'console_scripts': [
             'aruco_vision_node = perception.aruco_vision:main',
             'cell_vision_node = perception.cell_vision:main',
-            'publish_grid_pose = perception.publish_grid_pose:main',
         ],
     },
 )

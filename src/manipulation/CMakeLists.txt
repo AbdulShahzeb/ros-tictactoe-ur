@@ -17,7 +17,6 @@ find_package(ompl REQUIRED)
 
 
 add_executable(moveit_server src/moveit_server.cpp)
-add_executable(static_transform src/static_transform.cpp)
 
 ament_target_dependencies(moveit_server
   rclcpp
@@ -27,17 +26,8 @@ ament_target_dependencies(moveit_server
   helper
 )
 
-ament_target_dependencies(static_transform
-  rclcpp
-  std_msgs
-  geometry_msgs
-  tf2
-  tf2_ros
-)
-
 install(TARGETS
   moveit_server
-  static_transform
   DESTINATION lib/${PROJECT_NAME}
 )
 

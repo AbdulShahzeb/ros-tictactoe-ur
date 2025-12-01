@@ -7,11 +7,16 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 
+# Install URDF files
 install(
-	DIRECTORY
-	urdf/
-	meshes/
-	DESTINATION share/${PROJECT_NAME}/urdf
+  DIRECTORY urdf/
+  DESTINATION share/${PROJECT_NAME}/urdf
+)
+
+# Install mesh files
+install(
+  DIRECTORY meshes/
+  DESTINATION share/${PROJECT_NAME}/meshes
 )
 
 ament_package()
