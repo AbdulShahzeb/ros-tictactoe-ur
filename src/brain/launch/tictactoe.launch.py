@@ -11,12 +11,13 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
-from launch.substitutions import PythonExpression
 
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('brain')
-    
+    use_fake = True
+    gamemode = "robot"
+
     # Default paths for agent files
     default_agent_x = os.path.join(pkg_dir, 'models', 'menace_agent_x.npy')
     default_agent_o = os.path.join(pkg_dir, 'models', 'menace_agent_o.npy')
@@ -58,15 +59,6 @@ def generate_launch_description():
         description='Enable serial communication with robot'
     )
 
-    #DeclareLaunchArgument(
-    #    'gamemode',
-    #    default_value='human',
-    #    description='Game mode selection: human (human vs robot), robot (robot vs robot)'
-    #)
-
-    use_fake = True
-    gamemode = "robot"
-
     ip_address = "192.168.56.101"
     if not use_fake:
         ip_address = "192.168.0.100"
@@ -87,10 +79,9 @@ def generate_launch_description():
         'ur_type': 'ur5e',
         'robot_ip': ip_address,
         'launch_rviz': 'false',
+        'kinematics_params': kinematics_params_file,
+        'description_file': description_file,
     }
-    if not use_fake:
-        ur_control_launch_args['kinematics_params'] = kinematics_params_file
-        ur_control_launch_args['description_file'] = description_file
 
     ur_control_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([

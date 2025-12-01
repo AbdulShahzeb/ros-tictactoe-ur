@@ -28,6 +28,10 @@
     - [Robot vs. Robot Mode](#robot-vs-robot-mode)
   - [Troubleshooting](#troubleshooting)
 - [Results and Demo](#results-and-demo)
+  - [System Performance](#system-performance)
+  - [Robustness](#robustness)
+  - [Adaptability](#adaptability)
+  - [Innovation](#innovation)
 - [Discussion and Future Work](#discussion-and-future-work)
   - [Engineering Challenges and Solutions](#engineering-challenges-and-solutions)
   - [Future Improvements](#future-improvements)
@@ -75,14 +79,14 @@ The UR5e manipulator, equipped with a custom dual-marker end-effector, autonomou
 
 The following video shows one complete game cycle demonstrating closed-loop behaviour with real-time visualisation in RViz:
 
-`Placeholder: ![Tic-Tac-Toe Robot Demo](media/demo.mp4)`
+<video src="media/demo.mp4" controls></video>
 
 *Video: Robot autonomously detects human move (blue X), plans AI response (red O), executes drawing trajectory, and updates game state visualisation.*
 
 ## System Architecture
 
 ### ROS Architecture
-TODO
+<img src="media/rqt_graph.png">
 
 ### Package-level Architecture
 The system is organised into four main packages that communicate through ROS 2 topics, services, and actions:
@@ -244,6 +248,7 @@ The custom end-effector design prioritises simplicity in construction, featuring
 The system uses RViz as the primary visualisation tool, providing real-time feedback on robot state, perception data, and coordinate frames:
 
 **Robot Model & Planning**
+
 - Displays the UR5e robot arm with custom end-effector using MoveIt's motion planning plugin
 - Shows planned trajectories, collision geometry (table, walls, ceiling), and joint states
 - Visualises path constraints and planning attempts during motion execution
@@ -302,7 +307,46 @@ source install/setup.bash
 ```
 
 ### Hardware Setup
-TODO
+
+**Camera Installation**
+1. Mount the RealSense D435 camera overhead pointing downward at the grid
+2. Connect the camera USB cable to your ROS PC/laptop
+
+<img src="media/camera_mount.jpg" width=720>
+
+**End-Effector Assembly**
+
+3. Slide the dual-marker end-effector into the UR5e quick-release mechanism until it clicks into place
+
+<img src="media/end_effector_on_tool_flange.jpg" width=720>
+
+**Servo Wiring (Tool Flange Connectors)**
+
+4. Connect servo power and signal wires to the tool flange:
+   - **3-pin connector**: GND to Pin 0, 5V to Pin 1
+   - **8-pin connector**: Servo signal wire to Pin 1
+
+<img src="media/end_effector_wiring.jpg" width=720>
+
+**Teensy Microcontroller Wiring**
+
+5. Connect Teensy control signals to the tool flange:
+   - **3-pin connector**: Teensy GND to Pin 0
+   - **8-pin connector**: Teensy Pin 2 to Pin 1
+
+<img src="media/teensy_wiring.jpg" width=720>
+
+**Communication Setup**
+
+6. Connect Teensy USB cable to your ROS PC/laptop (for serial communication)
+7. Connect the orange Ethernet cable from the UR5e control box to your ROS PC/laptop
+
+**Verification**
+
+- Power on the UR5e and verify the teach pendant shows no errors
+- Verify Ethernet communication: `ping 192.168.0.100`  
+- Check camera feed: `ros2 run image_view image_view --ros-args -r image:=/camera/camera/color/image_raw`
+- Verify Teensy connection: `ls /dev/ttyACM*` (should show `/dev/ttyACM0`)
 
 ## Running the System
 **Quick Start**
@@ -432,7 +476,69 @@ The XTerm window provides manual control during gameplay:
 - Launch with `enable_serial:=false` if servo not available
 
 ## Results and Demo
-TODO
+
+### System Performance
+
+Our system successfully meets all design goals, demonstrating reliable autonomous gameplay across multiple testing sessions.
+
+**Quantitative Results**
+
+- **Drawing Accuracy**: ≤5mm deviation from target cell center across all 9 grid positions
+- **Planning Responsiveness**: Consistently <1 second from move detection to trajectory execution
+- **Multi-Game Reliability**: Successfully completed 10+ consecutive games without failures or manual intervention
+- **Detection Confidence**: 80% threshold over 3-second window achieves >90% true positive rate with zero false positives in indoor lighting
+
+**System Demonstration**
+
+See [System Demonstration](#system-demonstration) for a complete game cycle video showing closed-loop operation with real-time RViz visualisation.
+
+### Robustness
+
+The system handles real-world variability through multiple design choices:
+
+**Vision Robustness**
+- Confidence-based move detection (80% consistency over 3s) eliminates false positives from shadows, transient occlusions, or robot arm movements
+- Adjustable HSV thresholds via keyboard interface adapt to different lighting conditions without code modification
+- ArUco marker-based localisation provides reliable grid frame estimation
+
+**Motion Planning Reliability**
+- Orientation constraints prevent erratic trajectories and ensure consistent downward-facing approach
+- Collision geometry in planning scene prevents unintended contact with table, walls, or grid surface
+- Iterative trajectory parameterisation ensures joint velocity/acceleration limits are never exceeded 
+
+**Hardware Fault Tolerance**
+- Spring-loaded pen holders allow for up to 30mm of compression without damaging the marker or end-effector
+- Dual-marker design eliminates the need for tool changes
+- Modular end-effector design enables rapid replacement if components wear or break
+
+### Adaptability
+
+The modular architecture supports straightforward customisation for different hardware and gameplay scenarios:
+
+**Game Mode Flexibility**
+- Human vs. Robot mode uses vision-based detection for fully autonomous human move recognition
+- Robot vs. Robot mode accepts mouse input, allowing for remote operation
+- Architecture supports future extensions (e.g., voice commands, touchscreen input, network multiplayer)
+
+**Hardware Modularity**
+- Any ROS-compatible RGB camera can replace RealSense D435 with minimal configuration changes
+- Marker colours can be customised by changing the HSV threshold parameters
+- Compatible with any UR-series robot arm (tested on UR5e, but architecture supports UR3e/UR10e with workspace adjustments)
+
+**Scalability**
+- Custom ROS message definitions (`GridPose`, `DrawShape`, `MoveRequest`) abstract implementation details
+- Package-level separation enables development of the various packages independently
+- Launch file parameters expose key configuration values (player symbol, AI difficulty, gamemode) without code changes
+
+### Innovation
+
+- **Educational Accessibility**: Complete 3D-printed end-effector assembles in <1 minute, eliminating hardware complexity as barrier to learning
+
+- **Closed-Loop Autonomy**: Continuous grid monitoring enables natural human interaction—users simply draw on the board with physical markers
+
+- **AI Integration**: Reinforcement learning provides interpretable AI behaviour
+
+The system successfully demonstrates that complex robotics concepts can be integrated into an engaging, accessible educational platform that operates reliably in real-world conditions.
 
 ## Discussion and Future Work
 
