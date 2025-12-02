@@ -77,11 +77,11 @@ The UR5e manipulator, equipped with a custom dual-marker end-effector, autonomou
 
 ### System Demonstration
 
-The following video shows one complete game cycle demonstrating closed-loop behaviour with real-time visualisation in RViz:
+The following video shows one complete game cycle for both gamemodes, demonstrating closed-loop behaviour with real-time visualisation in RViz:
 
-<video src="media/demo.mp4" controls></video> # TODO
+[![Demo Video](https://img.youtube.com/vi/hXMSvpA56x8/0.jpg)](https://youtu.be/hXMSvpA56x8)
 
-*Video: Robot autonomously detects human move (blue X), plans AI response (red O), executes drawing trajectory, and updates game state visualisation.*
+*Video: UI Mode receives player move from UI input and draws it; Vision Mode detects drawn human move. In both, system plans AI response, executes drawing trajectory, and updates game state visualisation.*
 
 ## System Architecture
 
@@ -95,7 +95,7 @@ The system is organised into four main packages that communicate through ROS 2 t
 graph TB
     subgraph brain["🧠 Brain Package"]
         keyboard[keyboard_node]
-        brain_node[brain_node_vision_mode / brain_node_ui_mode]
+        brain_node[brain_node]
     end
 
     subgraph perception["👁️ Perception Package"]
@@ -139,7 +139,7 @@ graph TB
 #### Package Responsibilities
 | package | Purpose | Key Nodes |
 |---|---|---|
-| `brain` | Game logic, AI decision-making, orchestration | `vision_mode`, `ui_mode`, `keyboard_node` |
+| `brain` | Game logic, AI decision-making, orchestration | `brain_node_vision_mode`, `brain_node_ui_mode`, `keyboard_node` |
 | `perception` | CV, grid localisation, symbol detection | `aruco_vision_node`, `cell_vision_node` |
 | `manipulation` | Motion planning, trajectory execution, drawing | `moveit_server` |
 | `helper` | Shared interfaces and message definitions | Custom msg/srv/action types |
@@ -181,8 +181,8 @@ flowchart TB;
 ### Node Description
 **Brain Package**
 - `keyboard_node`: Provides manual control interface via XTerm terminal for toggling logs, adjusting CV parameters, returning robot to home position, and triggering shutdown.
-- `vision_mode`: Orchestrates Vision Mode gameplay by detecting human moves through CV, coordinating with the MENACE AI agent for robot moves, and managing game state through a Pygame UI.
-- `ui_mode`: Enables UI Mode gameplay where a human selects moves via mouse clicks for one player while the MENACE AI controls the other player, with both moves executed by the robot arm.
+- `brain_node_vision_mode`: Orchestrates Vision Mode gameplay by detecting human moves through CV, coordinating with the MENACE AI agent for robot moves, and managing game state through a Pygame UI.
+- `brain_node_ui_mode`: Enables UI Mode gameplay where a human selects moves via mouse clicks for one player while the MENACE AI controls the other player, with both moves executed by the robot arm.
 
 **Manipulation Package**
 - `moveit_server`: Motion planning and execution server that handles path planning for drawing X's and O's, erasing the grid (future work), and managing collision avoidance using MoveIt with configurable constraints and trajectory parameters.
@@ -223,6 +223,8 @@ The vision pipeline consists of two stages working in tandem to enable autonomou
 - Generates RViz markers overlaying detected symbols on the grid for real-time visualisation
 
 The pipeline enables fully autonomous human move detection in *Vision Mode*, eliminating the need for manual input devices.
+
+<img src="media/cv.png" width=480>
 
 ### Custom End-Effector
 
@@ -265,6 +267,8 @@ The system uses RViz as the primary visualisation tool, providing real-time feed
 - Enables visual verification of coordinate frame alignment
 
 The visualisation configuration is stored in `tictactoe.rviz` and launches automatically with the system, providing operators with comprehensive situational awareness of the robot's perception and planning state.
+
+<img src="media/rviz.png" width=480>
 
 ### Closed-Loop Operation
 The system implements closed-loop control through continuous vision-based state monitoring and adaptive decision-making:
@@ -312,13 +316,13 @@ source install/setup.bash
 1. Mount the RealSense D435 camera overhead pointing downward at the grid
 2. Connect the camera USB cable to your ROS PC/laptop
 
-<img src="media/camera_mount.jpg" width=720>
+<img src="media/camera_mount.jpg" width=480>
 
 **End-Effector Assembly**
 
 3. Slide the dual-marker end-effector into the UR5e quick-release mechanism until it clicks into place
 
-<img src="media/end_effector_on_tool_flange.jpg" width=720>
+<img src="media/end_effector_on_tool_flange.jpg" width=480>
 
 **Servo Wiring (Tool Flange Connectors)**
 
@@ -326,7 +330,7 @@ source install/setup.bash
    - **3-pin connector**: GND to Pin 0, 5V to Pin 1
    - **8-pin connector**: Servo signal wire to Pin 1
 
-<img src="media/end_effector_wiring.jpg" width=720>
+<img src="media/end_effector_wiring.jpg" width=480>
 
 **Teensy Microcontroller Wiring**
 
@@ -334,7 +338,7 @@ source install/setup.bash
    - **3-pin connector**: Teensy GND to Pin 0
    - **8-pin connector**: Teensy Pin 2 to Pin 1
 
-<img src="media/teensy_wiring.jpg" width=720>
+<img src="media/teensy_wiring.jpg" width=480>
 
 **Communication Setup**
 
