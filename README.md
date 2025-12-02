@@ -77,7 +77,7 @@ The UR5e manipulator, equipped with a custom dual-marker end-effector, autonomou
 
 ### System Demonstration
 
-The following video shows one complete game cycle for both gamemodes, demonstrating closed-loop behaviour with real-time visualisation in RViz:
+The following video (YouTube redirect) shows one complete game cycle for both gamemodes, demonstrating closed-loop behaviour with real-time visualisation in RViz:
 
 [![Demo Video](https://img.youtube.com/vi/hXMSvpA56x8/0.jpg)](https://youtu.be/hXMSvpA56x8)
 
@@ -647,7 +647,8 @@ ros-tictactoe-ur/
 │   │   └── action/                 # Custom action types (DrawShape, EraseGrid)
 │   │
 │   └── end_effector/               # Custom end-effector URDF and description
-│       └── urdf/                   # Robot model with dual-marker end-effector
+│       |── urdf/                   # Robot model with dual-marker end-effector
+|       └── meshes/                 # End-effector 3D model for RViz visualisation
 │
 └── requirements.txt                # Python dependencies
 ```
