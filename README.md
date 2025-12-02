@@ -9,8 +9,8 @@
   - [Package-level Architecture](#package-level-architecture)
     - [Package Responsibilities](#package-responsibilities)
   - [Behaviour Tree](#behaviour-tree)
-    - [Player vs. Robot Game Mode](#player-vs-robot-game-mode)
-    - [Robot vs. Robot Game Mode](#robot-vs-robot-game-mode)
+    - [Vision Mode](#vision-mode)
+    - [UI Mode](#ui-mode)
   - [Node Description](#node-description)
   - [Custom Messages](#custom-messages)
 - [Technical Components](#technical-components)
@@ -24,8 +24,8 @@
   - [Expected Behaviour](#expected-behaviour)
   - [Keyboard Commands](#keyboard-commands)
   - [Gameplay Instructions](#gameplay-instructions)
-    - [Human vs. Robot Mode](#human-vs-robot-mode)
-    - [Robot vs. Robot Mode](#robot-vs-robot-mode)
+    - [Vision Mode](#vision-mode-1)
+    - [UI Mode](#ui-mode-1)
   - [Troubleshooting](#troubleshooting)
 - [Results and Demo](#results-and-demo)
   - [System Performance](#system-performance)
@@ -79,7 +79,7 @@ The UR5e manipulator, equipped with a custom dual-marker end-effector, autonomou
 
 The following video shows one complete game cycle demonstrating closed-loop behaviour with real-time visualisation in RViz:
 
-<video src="media/demo.mp4" controls></video>
+<video src="media/demo.mp4" controls></video> # TODO
 
 *Video: Robot autonomously detects human move (blue X), plans AI response (red O), executes drawing trajectory, and updates game state visualisation.*
 
@@ -149,7 +149,7 @@ graph TB
 
 The system behaviour varies slightly depending on which player starts first and the gamemode chosen.
 
-#### Player vs. Robot Game Mode
+#### Vision Mode
 ```mermaid
 flowchart TB;
     A[Is game over?] -- No --> B[CV scans grid]
@@ -164,7 +164,7 @@ flowchart TB;
     G --> A
 ```
 
-#### Robot vs. Robot Game Mode
+#### UI Mode
 ```mermaid
 flowchart TB;
     A[Is game over?] -- No --> B[Wait for human move on UI]
@@ -222,7 +222,7 @@ The vision pipeline consists of two stages working in tandem to enable autonomou
 - Publishes cell poses in world coordinates and colour states (-1 = <span style="color:red">O</span>, 0 = empty, 1 = <span style="color:blue">X</span>) via the `GridPose` message
 - Generates RViz markers overlaying detected symbols on the grid for real-time visualisation
 
-The pipeline enables fully autonomous human move detection in the human vs. robot mode, eliminating the need for manual input devices.
+The pipeline enables fully autonomous human move detection in *Vision Mode*, eliminating the need for manual input devices.
 
 ### Custom End-Effector
 
@@ -277,7 +277,7 @@ The system implements closed-loop control through continuous vision-based state 
 
 **Adaptive Game Flow**
 
-- In human vs. robot mode, the system waits in a monitoring state during the human's turn, continuously processing vision data
+- In *Vision Mode*, the system waits in a monitoring state during the human's turn, continuously processing vision data
 - During robot motion, vision processing continues but move detection is suspended to prevent misclassification of the robot's own movements
 - After the robot completes its move, the system returns to the monitoring state and awaits the next human input
 - Once the game ends, the system updates scores and resets game state
@@ -371,7 +371,7 @@ def generate_launch_description():
 **Launch Commands**
 
 ```bash
-# Default: Human (X) vs. Robot
+# Default: Player (X) vs. Robot (O)
 ros2 launch brain tictactoe.launch.py
 
 # Play as O instead of X
@@ -426,8 +426,8 @@ Upon launching, the system will sequentially start the following components:
 
 5. **Game Ready State (8-10 seconds)**
 
-     - Pygame UI shows: `"Your turn (X) - Draw on the board"` (for human vs. robot)
-     - Or: `"Your turn (X) - Click to play"` (for robot vs. robot)
+     - Pygame UI shows: `"Your turn (X) - Draw on the board"` (for *Vision Mode*)
+     - Or: `"Your turn (X) - Click to play"` (for *UI Mode*)
 
 ### Keyboard Commands
 The XTerm window provides manual control during gameplay:
@@ -440,7 +440,7 @@ The XTerm window provides manual control during gameplay:
 | `q` | Quit | Shutdown all nodes gracefully |
 
 ### Gameplay Instructions
-#### Human vs. Robot Mode
+#### Vision Mode
 
 1. **Your turn**: Draw your symbol (X or O) on the physical grid using a marker
 2. **Wait for detection**: Keep marker visible for ~3 seconds until move is confirmed
@@ -448,7 +448,7 @@ The XTerm window provides manual control during gameplay:
 4. Game continues until win/draw condition is met
 5. **New game**: Press `Space` in Pygame window to reset
 
-#### Robot vs. Robot Mode
+#### UI Mode
 
 1. **Your turn**: Click on an empty cell in the Pygame window
 2. **Robot draws**: Robot switches to your color and draws the selected symbol
@@ -528,8 +528,8 @@ The system handles real-world variability through multiple design choices:
 The modular architecture supports straightforward customisation for different hardware and gameplay scenarios:
 
 **Game Mode Flexibility**
-- Human vs. Robot mode uses vision-based detection for fully autonomous human move recognition
-- Robot vs. Robot mode accepts mouse input, allowing for remote operation
+- *Vision Mode* uses vision-based detection for fully autonomous human move recognition
+- *UI Mode* accepts mouse input, allowing for remote operation
 - Architecture supports future extensions (e.g., voice commands, touchscreen input, network multiplayer)
 
 **Hardware Modularity**
