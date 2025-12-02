@@ -249,6 +249,9 @@ class CellVision(Node):
                 marker.pose.position.y = y
                 marker.pose.position.z = 0.0
                 marker.pose.orientation.w = 1.0
+                marker.scale.x = 1.0
+                marker.scale.y = 1.0
+                marker.scale.z = 1.0
                 marker.mesh_resource = self.x_mesh_path if color_codes[i] == 1 else self.o_mesh_path
                 marker.mesh_use_embedded_materials = False
 

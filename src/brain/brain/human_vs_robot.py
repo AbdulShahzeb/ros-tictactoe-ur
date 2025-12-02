@@ -23,8 +23,9 @@ from time import sleep
 
 
 class EndEffectorState(Enum):
-    MARKER = 135
+    RED = 135
     MIDDLE = 90
+    BLUE = 45
 
 
 def encode_board_base3(board_array: np.ndarray) -> int:
@@ -302,7 +303,7 @@ class TicTacToeNode(Node):
         # Game setup
         self.human_player = 1 if player_str.lower() == "x" else -1
         self.ai_player = -self.human_player
-        self.end_effector_state = EndEffectorState.MARKER
+        self.end_effector_state = EndEffectorState.RED if self.human_player == 1 else EndEffectorState.BLUE
 
         # Load AI agent
         if self.ai_player == 1:
@@ -552,7 +553,7 @@ class TicTacToeNode(Node):
         self.publish_game_status("New game started")
         self.get_logger().info("Game reset")
         if self.enable_serial:
-            self.end_effector_state = EndEffectorState.MARKER
+            self.end_effector_state = EndEffectorState.RED if self.human_player == 1 else EndEffectorState.BLUE
             self.ser.write(f"{self.end_effector_state.value}\n".encode())
 
         # If AI goes first, make its move

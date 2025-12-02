@@ -15,8 +15,8 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('brain')
-    use_fake = True
-    gamemode = "human"
+    use_fake = False
+    gamemode = "robot"
 
     # Default paths for agent files
     default_agent_x = os.path.join(pkg_dir, 'models', 'menace_agent_x.npy')
@@ -142,7 +142,7 @@ def generate_launch_description():
         launch_arguments={
             'enable_color': 'true',
             'enable_depth': 'false',
-            'rgb_camera.color_profile': '1920x1080x15',
+            'rgb_camera.color_profile': '1280x720x15',
             'pointcloud.enable': 'false'
         }.items()
     )
