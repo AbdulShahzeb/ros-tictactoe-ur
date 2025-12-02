@@ -432,6 +432,8 @@ Upon launching, the system will sequentially start the following components:
 
      - Pygame UI shows: `"Your turn (X) - Draw on the board"` (for *Vision Mode*)
      - Or: `"Your turn (X) - Click to play"` (for *UI Mode*)
+     
+     <img src="media/pygame_ui.png" width=360>
 
 ### Keyboard Commands
 The XTerm window provides manual control during gameplay:
