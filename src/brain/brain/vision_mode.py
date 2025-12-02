@@ -19,7 +19,6 @@ from helper.action import DrawShape
 from ament_index_python.packages import get_package_share_directory
 import serial
 from enum import Enum
-from time import sleep
 
 
 class EndEffectorState(Enum):
@@ -280,7 +279,7 @@ class TicTacToeNode(Node):
     """
 
     def __init__(self):
-        super().__init__("human_vs_robot_node")
+        super().__init__("brain_node_vision_mode")
 
         # Declare parameters
         package_dir = get_package_share_directory("brain")

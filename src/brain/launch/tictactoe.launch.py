@@ -6,7 +6,8 @@ Launch file for TicTacToe game node.
 import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -16,17 +17,22 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     pkg_dir = get_package_share_directory('brain')
     use_fake = False
-    gamemode = "robot"
 
     # Default paths for agent files
     default_agent_x = os.path.join(pkg_dir, 'models', 'menace_agent_x.npy')
     default_agent_o = os.path.join(pkg_dir, 'models', 'menace_agent_o.npy')
 
     # Declare launch arguments
-    DeclareLaunchArgument(
+    fake_arg = DeclareLaunchArgument(
         'fake',
         default_value='false',
         description='Use fake robot for testing'
+    )
+
+    gamemode_arg = DeclareLaunchArgument(
+        'gamemode',
+        default_value='vision',
+        description='Game mode: vision or ui'
     )
 
     player_arg = DeclareLaunchArgument(
@@ -59,9 +65,12 @@ def generate_launch_description():
         description='Enable serial communication with robot'
     )
 
-    ip_address = "192.168.56.101"
+    '''ip_address = "192.168.56.101"
     if not use_fake:
-        ip_address = "192.168.0.100"
+        ip_address = "192.168.0.100"'''
+    ip_address = PythonExpression([
+        "'192.168.56.101' if '", LaunchConfiguration('fake'), "' == 'true' else '192.168.0.100'"
+    ])
     description_file = os.path.join(
         get_package_share_directory('end_effector'),
         'urdf',
@@ -70,7 +79,7 @@ def generate_launch_description():
     kinematics_params_file = os.path.join(
         get_package_share_directory('brain'),
         'config',
-        'robot6_calib.yaml'
+        'robot1_calib.yaml'
     )
 
 
@@ -166,10 +175,12 @@ def generate_launch_description():
 
 
     # Brain node
-    brain_executable = 'robot_vs_robot_node' if gamemode == 'robot' else 'human_vs_robot_node'
+    # brain_executable = 'robot_vs_robot_node' if gamemode == 'robot' else 'human_vs_robot_node'
     brain_node = Node(
         package='brain',
-        executable=brain_executable,
+        executable=PythonExpression([
+            "'brain_node_ui_mode' if '", LaunchConfiguration('gamemode'), "' == 'ui' else 'brain_node_vision_mode'"
+        ]),
         name='brain_node',
         output='screen',
         parameters=[{
@@ -217,6 +228,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        fake_arg,
+        gamemode_arg,
         player_arg,
         agent_x_file_arg,
         agent_o_file_arg,

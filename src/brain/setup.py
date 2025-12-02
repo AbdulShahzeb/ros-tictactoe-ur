@@ -30,8 +30,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'human_vs_robot_node = brain.human_vs_robot:main',
-            'robot_vs_robot_node = brain.robot_vs_robot:main',
+            'brain_node_vision_mode = brain.vision_mode:main',
+            'brain_node_ui_mode = brain.ui_mode:main',
             'keyboard_node = brain.keyboard_node:main',
         ],
     },

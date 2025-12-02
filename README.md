@@ -95,7 +95,7 @@ The system is organised into four main packages that communicate through ROS 2 t
 graph TB
     subgraph brain["🧠 Brain Package"]
         keyboard[keyboard_node]
-        hvr[human_vs_robot / robot_vs_robot]
+        brain_node[brain_node_vision_mode / brain_node_ui_mode]
     end
 
     subgraph perception["👁️ Perception Package"]
@@ -115,10 +115,10 @@ graph TB
 
     %% Perception to Brain
     aruco -->|/perception/warped_grid<br/>sensor_msgs/Image| cell
-    cell -->|/perception/cell_poses<br/>GridPose| hvr
+    cell -->|/perception/cell_poses<br/>GridPose| brain_node
 
     %% Brain to Manipulation
-    hvr -.->|/manipulation/draw_shape<br/>DrawShape Action| moveit
+    brain_node -.->|/manipulation/draw_shape<br/>DrawShape Action| moveit
     
     %% Keyboard to Perception
     keyboard -->|/kb/enable_prelim_cv<br/>std_msgs/Bool| aruco
@@ -129,8 +129,8 @@ graph TB
 
     %% Helper dependencies
     cell -.->|uses| msgs
-    hvr -.->|uses| msgs
-    hvr -.->|uses| actions
+    brain_node -.->|uses| msgs
+    brain_node -.->|uses| actions
     moveit -.->|uses| actions
     moveit -.->|uses| srvs
     keyboard -.->|uses| srvs
@@ -139,7 +139,7 @@ graph TB
 #### Package Responsibilities
 | package | Purpose | Key Nodes |
 |---|---|---|
-| `brain` | Game logic, AI decision-making, orchestration | `human_vs_robot`, `robot_vs_robot`, `keyboard_node` |
+| `brain` | Game logic, AI decision-making, orchestration | `vision_mode`, `ui_mode`, `keyboard_node` |
 | `perception` | CV, grid localisation, symbol detection | `aruco_vision_node`, `cell_vision_node` |
 | `manipulation` | Motion planning, trajectory execution, drawing | `moveit_server` |
 | `helper` | Shared interfaces and message definitions | Custom msg/srv/action types |
@@ -181,8 +181,8 @@ flowchart TB;
 ### Node Description
 **Brain Package**
 - `keyboard_node`: Provides manual control interface via XTerm terminal for toggling logs, adjusting CV parameters, returning robot to home position, and triggering shutdown.
-- `human_vs_robot`: Orchestrates human vs. AI gameplay by detecting human moves through CV, coordinating with the MENACE AI agent for robot moves, and managing game state through a Pygame UI.
-- `robot_vs_robot`: Enables robot vs. robot gameplay where a human selects moves via mouse clicks for one player while the MENACE AI controls the other player, with both moves executed by the robot arm.
+- `vision_mode`: Orchestrates Vision Mode gameplay by detecting human moves through CV, coordinating with the MENACE AI agent for robot moves, and managing game state through a Pygame UI.
+- `ui_mode`: Enables UI Mode gameplay where a human selects moves via mouse clicks for one player while the MENACE AI controls the other player, with both moves executed by the robot arm.
 
 **Manipulation Package**
 - `moveit_server`: Motion planning and execution server that handles path planning for drawing X's and O's, erasing the grid (future work), and managing collision avoidance using MoveIt with configurable constraints and trajectory parameters.
@@ -349,34 +349,46 @@ source install/setup.bash
 - Verify Teensy connection: `ls /dev/ttyACM*` (should show `/dev/ttyACM0`)
 
 ## Running the System
-**Quick Start**
-Launch the complete system with a single command:
-```bash
-# Default: Human (X) vs. Robot (O)
-ros2 launch brain tictactoe.launch.py
+
+**Configuration**
+
+Before launching, you must configure the system by editing `src/brain/launch/tictactoe.launch.py`:
+
+```python
+def generate_launch_description():
+    pkg_dir = get_package_share_directory('brain')
+    
+    # Configuration options
+    use_fake = False      # Set to True for URSim simulation
+    gamemode = "vision"    # Options: "vision" (CV Detection Mode) or "ui" (UI Mouse Input Mode)
 ```
 
-**Launch Options**
-The system supports multiple game modes and player configurations:
+- `use_fake`: Toggle between real hardware (`False`) and URSim simulation (`True`)
+- `gamemode`: 
+  - `"vision"` - Vision mode with CV-based move detection
+  - `"ui"` - UI mode with mouse-based move selection
+
+**Launch Commands**
+
 ```bash
-# Human vs. Robot modes
-ros2 launch brain tictactoe.launch.py player:=x    # Play as X (default)
-ros2 launch brain tictactoe.launch.py player:=o    # Play as O
+# Default: Human (X) vs. Robot
+ros2 launch brain tictactoe.launch.py
 
-# Robot vs. Robot mode (human selects moves via mouse for one player)
-ros2 launch brain tictactoe.launch.py player:=x gamemode:=robot
-ros2 launch brain tictactoe.launch.py player:=o gamemode:=robot
+# Play as O instead of X
+ros2 launch brain tictactoe.launch.py player:=o
 
-# Disable serial communication (if end-effector servo not connected)
+# Disable serial communication (required for URSim or if servo not connected)
 ros2 launch brain tictactoe.launch.py enable_serial:=false
 ```
 
 **Launch Parameters**
 
-- `player`: Symbol for human player (x or o, default: x)
-- `gamemode`: Game mode selection (human or robot, default: human)
-- `enable_serial`: Enable servo control for end-effector (true or false, default: true)
-- `fps`: Camera frame rate in Hz (default: 15)
+- `player`: Symbol for human player (`x` or `o`, default: `x`)
+- `enable_serial`: Enable servo control for end-effector (`true` or `false`, default: `true`)
+  - Must be set to `false` when using URSim simulation
+- `agent_x_file`: Path to trained X agent model (default: `models/menace_agent_x.npy`)
+- `agent_o_file`: Path to trained O agent model (default: `models/menace_agent_o.npy`)
+- `fps`: Camera frame rate in Hz (default: `15`)
 
 ### Expected Behaviour
 
@@ -606,8 +618,8 @@ ros-tictactoe-ur/
 ├── src/
 │   ├── brain/                      # High-level game logic and orchestration
 │   │   ├── brain/                  # Python nodes for game management
-│   │   │   ├── human_vs_robot.py   # Human vs AI game mode with CV move detection
-│   │   │   ├── robot_vs_robot.py   # Robot vs robot game mode with mouse input
+│   │   │   ├── vision_mode.py      # Vision-based game mode with CV move detection
+│   │   │   ├── ui_mode.py          # UI-based game mode with mouse input
 │   │   │   └── keyboard_node.py    # Manual control interface via terminal
 │   │   ├── launch/                 # Launch files for system startup
 │   │   ├── models/                 # Trained MENACE AI agent files (.npy)

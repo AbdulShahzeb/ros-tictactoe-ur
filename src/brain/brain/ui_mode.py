@@ -14,7 +14,6 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from std_msgs.msg import String, Int32MultiArray, Int32, Bool
-from geometry_msgs.msg import Pose2D
 from helper.msg import GridPose
 from helper.action import DrawShape
 from ament_index_python.packages import get_package_share_directory
@@ -291,7 +290,7 @@ class TicTacToeNode(Node):
     """
 
     def __init__(self):
-        super().__init__("robot_vs_robot_node")
+        super().__init__("brain_node_ui_mode")
 
         # Declare parameters
         package_dir = get_package_share_directory("brain")
