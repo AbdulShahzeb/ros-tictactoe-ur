@@ -35,6 +35,7 @@
 - [Discussion and Future Work](#discussion-and-future-work)
   - [Engineering Challenges and Solutions](#engineering-challenges-and-solutions)
   - [Future Improvements](#future-improvements)
+  - [External Factors Analysis](#external-factors-analysis)
   - [Novelty, Creativity, and Effectiveness](#novelty-creativity-and-effectiveness)
 - [Contributors and Roles](#contributors-and-roles)
 - [Repository Structure](#repository-structure)
@@ -593,6 +594,24 @@ An automated calibration procedure at startup would eliminate manual threshold t
 Grid erasing functionality between games could be added in Version 2.0 to enable fully autonomous multi-game sessions. This would require an end-effector fitted with a whiteboard eraser.
 
 The perception pipeline could also support dynamic grid detection for various whiteboard sizes and orientations.
+
+### External Factors Analysis
+
+**Lighting Conditions**
+
+The current HSV-based color detection is sensitive to ambient lighting variations, which can cause detection failures in environments with inconsistent illumination, shadows, or colored lighting. Version 2.0 should implement adaptive thresholding that adjusts HSV ranges based on real-time analysis of lighting conditions. Integrating an LED ring light could provide consistent illumination regardless of environmental conditions. A more robust approach would employ a lightweight CNN trained on diverse lighting conditions, making the system resilient to lighting changes.
+
+**Marker Variability**
+
+Different whiteboard marker brands exhibit significant color variation even within the same nominal color (e.g., "blue" markers range from cyan to navy). The current system requires manual recalibration when markers are changed. Version 2.0 should implement marker color profiling at startup where users present each marker to the camera for automatic HSV threshold computation. For maximum robustness, a color-agnostic approach using shape detection (X vs O geometry) combined with any contrasting color against the white background would eliminate marker dependency entirely.
+
+**Marker Deterioration**
+
+Markers dry out over extended use, producing inconsistent line widths and colors that may fall outside detection thresholds. Version 2.0 could implement line quality assessment during drawing by analysing the warped grid image in real-time—if drawn lines appear too faint, the system could automatically request marker replacement. It could also explore predictive maintenance by tracking usage metrics (duration, drawing distance, etc.) and alert operators when marker approaches replacement intervals.
+
+**Scalability and Deployment**
+
+Deploying the system across different robot models, camera configurations, or game variations requires extensive recalibration and code modification. Version 2.0 should implement a modular configuration system using YAML parameter files for all hardware-specific values (camera intrinsics, robot offsets, marker colors, grid dimensions). A web-based configuration interface could guide non-expert users through setup by automatically detecting connected hardware and running calibration procedures. Supporting additional games beyond tic-tac-toe would require abstracting the game logic into a framework where new rule sets can be defined without modifying core system components.
 
 ### Novelty, Creativity, and Effectiveness
 
