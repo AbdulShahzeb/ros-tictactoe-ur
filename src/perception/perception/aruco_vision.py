@@ -41,7 +41,7 @@ class ArucoVisionNode(Node):
         self.cy = 373.8798522949219
 
         # --- Camera to base_link transform
-        self.cam_to_base_translation = (0.850, 0.231, 0.912)  # (x, y, z) in meters
+        self.cam_to_base_translation = (0.837, 0.231, 0.912)  # (x, y, z) in meters
         self.cam_to_base_rpy = (math.pi, 0, math.pi)  # (roll, pitch, yaw)
 
         # Grid parameters

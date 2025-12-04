@@ -32,7 +32,7 @@ class CellVision(Node):
         # --- Publishers & Subscribers ---
         self.image_sub = self.create_subscription(Image, "/perception/warped_grid", self.image_callback, 10)
         self.set_min_blue_sat_sub = self.create_subscription(Int32, "/kb/set_min_blue_sat", self.set_min_blue_sat_callback, 10)
-        self.min_blue_sat = 90
+        self.min_blue_sat = 130
         self.shutdown_sub = self.create_subscription(
             Bool, "/kb/shutdown", self.shutdown_callback, 10
         )

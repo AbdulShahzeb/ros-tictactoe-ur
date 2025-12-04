@@ -79,7 +79,7 @@ def generate_launch_description():
     kinematics_params_file = os.path.join(
         get_package_share_directory('brain'),
         'config',
-        'robot5_calib.yaml'
+        'robot4_calib.yaml'
     )
 
 

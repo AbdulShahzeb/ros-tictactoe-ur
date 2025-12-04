@@ -46,7 +46,7 @@ class MoveitServer {
         // Drawing parameters
         node_->declare_parameter("x_offset", -0.047);
         node_->declare_parameter("y_offset", -0.106);
-        node_->declare_parameter("drawing_height", 0.205);
+        node_->declare_parameter("drawing_height", 0.207);
         node_->declare_parameter("lift_height", node_->get_parameter("drawing_height").as_double() + 0.05);
         node_->declare_parameter("cell_size", 0.04);
         node_->declare_parameter("erase_height", 0.180);
